@@ -551,6 +551,7 @@
             const [activeTab, setActiveTab] = useState('ghi_so');
             const [selectedBuilding, setSelectedBuilding] = useState(data.buildings[0]?.id || '');
             const [showConfirmNewMonth, setShowConfirmNewMonth] = useState(false);
+            const [syncStatus, setSyncStatus] = useState(''); // ĐÈN BÁO TÍN HIỆU ĐỒNG BỘ
 
             // BỘ NÃO ĐỌC DỮ LIỆU BẢNG 2 CHIỀU TỪ GOOGLE SHEETS
         useEffect(() => {
@@ -558,10 +559,24 @@
             if (saved) setData(saved);
 
             if (SCRIPT_URL) {
+                setSyncStatus('syncing');
                 // Thêm tham số &t=... để ép trình duyệt không lưu cache, luôn lấy số liệu mới nhất
                 fetch(`${SCRIPT_URL}?month=${currentMonth}&year=${currentYear}&t=${new Date().getTime()}`)
-                    .then(res => res.json())
+                    .then(async res => {
+                        const text = await res.text();
+                        try {
+                            return JSON.parse(text); // Cố gắng đọc dữ liệu dạng chuẩn
+                        } catch (err) {
+                            // Nếu Google trả về trang đăng nhập HTML thay vì dữ liệu, sẽ báo lỗi ngay lập tức
+                            throw new Error("Lỗi quyền truy cập: Google từ chối gửi dữ liệu.");
+                        }
+                    })
                     .then(rawSheetData => {
+                        if (rawSheetData.error) {
+                            setSyncStatus('success'); // Không có sheet tháng này, không sao cả
+                            return; 
+                        }
+                        
                         // Kiểm tra nếu dữ liệu trả về đúng là mảng 2 chiều
                         if (Array.isArray(rawSheetData) && rawSheetData.length > 1) {
                             setData(prevData => {
@@ -569,53 +584,49 @@
                                 const newRooms = [...newData.rooms];
                                 const newBuildings = [...newData.buildings];
 
-                                let currentBuildingName = ""; // Biến nhớ tên khu vực
+                                let currentBuildingName = ""; 
                                 let currentBuildingId = "";
 
-                                // Bỏ qua dòng đầu tiên (tiêu đề)
                                 for (let i = 1; i < rawSheetData.length; i++) {
                                     const row = rawSheetData[i];
 
-                                    // Lấy tên khu vực. Nếu ô rỗng (do merge), dùng tên khu vực trước đó
                                     const bName = row[1] ? String(row[1]).trim() : currentBuildingName;
                                     currentBuildingName = bName;
-
-                                    if (!bName) continue; // Bỏ qua nếu không xác định được khu vực
+                                    if (!bName) continue; 
 
                                     const rName = String(row[2]).replace("Phòng ", "").trim();
 
-                                    // 1. TÌM HOẶC TẠO KHU VỰC
                                     let bIndex = newBuildings.findIndex(b => b.name === bName);
                                     if (bIndex === -1) {
                                         currentBuildingId = 'khu_' + Date.now() + Math.random().toString(36).substr(2, 5);
                                         newBuildings.push({
                                             id: currentBuildingId,
                                             name: bName,
-                                            rates: { elec: 3500, water: 14000, service: Number(row[10]) || 50000 } // Tạm lấy phí dịch vụ từ sheet
+                                            rates: { elec: 3500, water: 14000, service: Number(row[10]) || 50000 } 
                                         });
                                     } else {
                                         currentBuildingId = newBuildings[bIndex].id;
                                     }
 
-                                    // 2. TÌM HOẶC TẠO PHÒNG
                                     let rIndex = newRooms.findIndex(r => r.buildingId === currentBuildingId && r.name === rName);
                                     
+                                    // Hàm đọc số liệu cực kỳ an toàn, chống mọi lỗi định dạng của Google Sheets
+                                    const parseNum = (val) => (val === "" || val === undefined || val === null) ? null : Number(val);
+
                                     const roomData = {
                                         tenant: row[3] || "",
                                         phone: row[4] || "",
-                                        lastElec: row[5] !== "" ? Number(row[5]) : 0,
-                                        currentElec: row[6] !== "" ? Number(row[6]) : null,
-                                        lastWater: row[7] !== "" ? Number(row[7]) : 0,
-                                        currentWater: row[8] !== "" ? Number(row[8]) : null,
-                                        price: row[9] !== "" ? Number(row[9]) : 0,
-                                        debt: row[11] !== "" ? Number(row[11]) : 0
+                                        lastElec: parseNum(row[5]) || 0,
+                                        currentElec: parseNum(row[6]),
+                                        lastWater: parseNum(row[7]) || 0,
+                                        currentWater: parseNum(row[8]),
+                                        price: parseNum(row[9]) || 0,
+                                        debt: parseNum(row[11]) || 0
                                     };
 
                                     if (rIndex !== -1) {
-                                        // Cập nhật phòng đã có
                                         newRooms[rIndex] = { ...newRooms[rIndex], ...roomData };
                                     } else {
-                                        // Thêm phòng mới nếu chưa có trên giao diện
                                         newRooms.push({
                                             id: 'r_' + Date.now() + Math.random().toString(36).substr(2, 5),
                                             buildingId: currentBuildingId,
@@ -633,7 +644,11 @@
                                 return newData;
                             });
                         }
-                    }).catch(e => { console.log("Lỗi đồng bộ:", e); });
+                        setSyncStatus('success');
+                    }).catch(e => { 
+                        console.log("Lỗi đồng bộ:", e); 
+                        setSyncStatus('error'); // Bật đèn báo lỗi đỏ trên thanh tiêu đề
+                    });
             }
         }, [currentMonth, currentYear]);
 
@@ -686,7 +701,13 @@
                 <div className="mobile-container relative">
                     <div className="bg-gray-900 text-white flex justify-between items-center px-4 py-3 z-50 flex-shrink-0">
                         <button onClick={handlePrevMonth} className="p-1.5 hover:bg-gray-800 rounded-lg"><Icon name="chevron-left" className="w-5 h-5" /></button>
-                        <h1 className="font-semibold text-sm tracking-wider">THÁNG {currentMonth} / {currentYear}</h1>
+                        <div className="flex flex-col items-center">
+                            <h1 className="font-semibold text-sm tracking-wider">THÁNG {currentMonth} / {currentYear}</h1>
+                            {/* HIỂN THỊ ĐÈN BÁO TRẠNG THÁI */}
+                            {syncStatus === 'syncing' && <span className="text-[10px] text-yellow-400 font-medium">Đang tải dữ liệu...</span>}
+                            {syncStatus === 'error' && <span className="text-[10px] text-red-400 font-bold">Lỗi Google (Chưa mở quyền)</span>}
+                            {syncStatus === 'success' && <span className="text-[10px] text-green-400 font-medium">Đã lấy dữ liệu mới</span>}
+                        </div>
                         <button onClick={handleNextMonth} className="p-1.5 hover:bg-gray-800 rounded-lg"><Icon name="chevron-right" className="w-5 h-5" /></button>
                     </div>
 
