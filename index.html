@@ -58,10 +58,10 @@
 
         const INITIAL_DATA = {
             buildings: [
-                { id: 'khu_a', name: 'Quỳnh Thi', rates: { elec: 3500, water: 14000, service: 50000 } }
+                { id: 'khu_a', name: 'Quỳnh Thi cũ', rates: { elec: 3500, water: 14000, service: 5000 } }
             ],
             rooms: [
-                { id: 'a101', buildingId: 'khu_a', name: '101', tenant: 'Quỳnh Thi', phone: '0901234567', price: 1000000, debt: 0, lastElec: 1250, lastWater: 120, currentElec: null, currentWater: null, paymentStatus: 'none', subDebt: 0 }
+                { id: 'a101', buildingId: 'khu_a', name: '2', tenant: '', phone: '', price: 900000, debt: 0, lastElec: 0, lastWater: 0, currentElec: null, currentWater: null, paymentStatus: 'none', subDebt: 0 }
             ]
         };
 
@@ -77,15 +77,16 @@
         };
 
         const calculateBaseTotal = (room, rates) => {
-            if (!room.tenant || !rates) return 0;
+            if (!room.tenant && room.price === 0) return 0;
             const usedElec = Math.max(0, (room.currentElec !== null ? room.currentElec : room.lastElec) - room.lastElec);
             const usedWater = Math.max(0, (room.currentWater !== null ? room.currentWater : room.lastWater) - room.lastWater);
             const carriedDebt = Number(room.debt || 0); 
             return Number(room.price) + (usedElec * rates.elec) + (usedWater * rates.water) + Number(rates.service) + carriedDebt;
         };
 
+        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyijDGpAV6NTCCKXpDKqAvd7TIbQF2SIdx0z_J40G4NWNTnvhmfQJwvYOlDxEmNWc-IXA/exec';
+
         const syncDataToSheets = async (currentData, month, year) => {
-            const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyijDGpAV6NTCCKXpDKqAvd7TIbQF2SIdx0z_J40G4NWNTnvhmfQJwvYOlDxEmNWc-IXA/exec'; // <-- DÁN LINK GOOGLE APPS SCRIPT VÀO ĐÂY
             if (!SCRIPT_URL) return;
             const payload = { ...currentData, month: String(month).padStart(2, '0'), year: String(year) };
             try { 
@@ -551,23 +552,55 @@
             const [selectedBuilding, setSelectedBuilding] = useState(data.buildings[0]?.id || '');
             const [showConfirmNewMonth, setShowConfirmNewMonth] = useState(false);
 
-            // Tự động kéo dữ liệu từ Google Sheets về khi đổi tháng
+            // BỘ NÃO ĐỌC DỮ LIỆU BẢNG 2 CHIỀU TỪ GOOGLE SHEETS
             useEffect(() => {
                 const saved = loadStorageData(currentMonth, currentYear);
-                if (saved) {
-                    setData(saved);
-                } else {
-                    const SCRIPT_URL = ''; // <-- DÁN LINK GOOGLE APPS SCRIPT VÀO ĐÂY
-                    if (SCRIPT_URL) {
-                        fetch(`${SCRIPT_URL}?month=${currentMonth}&year=${currentYear}`)
-                            .then(res => res.json())
-                            .then(resData => {
-                                if (resData && resData.rooms) {
-                                    setData(resData);
-                                    saveStorageData(currentMonth, currentYear, resData);
-                                }
-                            }).catch(e => {});
-                    }
+                if (saved) setData(saved);
+
+                if (SCRIPT_URL) {
+                    // Thêm tham số &t=... để ép trình duyệt không lưu cache, luôn lấy số liệu mới nhất
+                    fetch(`${SCRIPT_URL}?month=${currentMonth}&year=${currentYear}&t=${new Date().getTime()}`)
+                        .then(res => res.json())
+                        .then(rawSheetData => {
+                            // Nếu dữ liệu trả về đúng là 1 mảng (Bảng Google Sheets)
+                            if (Array.isArray(rawSheetData) && rawSheetData.length > 1) {
+                                setData(prevData => {
+                                    const newData = { ...prevData };
+                                    const newRooms = [...newData.rooms];
+                                    
+                                    // Chạy từ dòng 2 (index 1) để bỏ qua tiêu đề cột
+                                    for (let i = 1; i < rawSheetData.length; i++) {
+                                        const row = rawSheetData[i];
+                                        const bName = row[1];
+                                        const rName = String(row[2]).replace("Phòng ", "").trim();
+                                        
+                                        // Tìm ID khu vực
+                                        const bIndex = newData.buildings.findIndex(b => b.name === bName);
+                                        if (bIndex === -1) continue;
+                                        const bId = newData.buildings[bIndex].id;
+                                        
+                                        // Tìm Phòng để lắp ráp dữ liệu
+                                        const rIndex = newRooms.findIndex(r => r.buildingId === bId && r.name == rName);
+                                        if (rIndex !== -1) {
+                                            newRooms[rIndex] = {
+                                                ...newRooms[rIndex],
+                                                tenant: row[3] || "",
+                                                phone: row[4] || "",
+                                                lastElec: row[5] !== "" ? Number(row[5]) : 0,
+                                                currentElec: row[6] !== "" ? Number(row[6]) : null,
+                                                lastWater: row[7] !== "" ? Number(row[7]) : 0,
+                                                currentWater: row[8] !== "" ? Number(row[8]) : null,
+                                                price: row[9] !== "" ? Number(row[9]) : newRooms[rIndex].price,
+                                                debt: row[11] !== "" ? Number(row[11]) : 0
+                                            };
+                                        }
+                                    }
+                                    newData.rooms = newRooms;
+                                    saveStorageData(currentMonth, currentYear, newData);
+                                    return newData;
+                                });
+                            }
+                        }).catch(e => { console.log("Lỗi đồng bộ:", e); });
                 }
             }, [currentMonth, currentYear]);
 
