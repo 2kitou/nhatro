@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Quản Lý Nhà Trọ</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+            color: #111827;
+        }
+        .mobile-container {
+            max-width: 480px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            height: 100vh;
+            height: 100dvh; 
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 0 20px rgba(0,0,0,0.05);
+            overflow: hidden; 
+        }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; scroll-behavior: smooth; }
+        .fade-in { animation: fadeIn 0.15s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        
+        input[type=number]::-webkit-inner-spin-button, 
+        input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        input, button, select { font-size: 16px; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        const loadStorageData = (m, y) => {
+            const key = `nhatro_data_${y}_${m}`;
+            const saved = localStorage.getItem(key);
+            if (saved) {
+                try { return JSON.parse(saved); } catch(e) {}
+            }
+            return null;
+        };
+
+        const saveStorageData = (m, y, data) => {
+            const key = `nhatro_data_${y}_${m}`;
+            localStorage.setItem(key, JSON.stringify(data));
+        };
+
+        const INITIAL_DATA = {
+            buildings: [
+                { id: 'khu_a', name: 'Quỳnh Thi cũ', rates: { elec: 3500, water: 14000, service: 50000 } }
+            ],
+            rooms: [
+                { id: 'a101', buildingId: 'khu_a', name: '101', tenant: 'Quỳnh Thi', phone: '0901234567', price: 1000000, debt: 0, lastElec: 1250, lastWater: 120, currentElec: null, currentWater: null, paymentStatus: 'none', subDebt: 0 }
+            ]
+        };
+
+        const Icon = ({ name, className }) => {
+            const spanRef = useRef(null);
+            useEffect(() => {
+                if (spanRef.current && window.lucide) {
+                    spanRef.current.innerHTML = `<i data-lucide="${name}" class="${className || ''}"></i>`;
+                    window.lucide.createIcons({ root: spanRef.current });
+                }
+            }, [name, className]);
+            return <span ref={spanRef} style={{ display: 'contents' }}></span>;
+        };
+
+        const calculateBaseTotal = (room, rates) => {
+            if (!room.tenant || !rates) return 0;
+            const usedElec = Math.max(0, (room.currentElec !== null ? room.currentElec : room.lastElec) - room.lastElec);
+            const usedWater = Math.max(0, (room.currentWater !== null ? room.currentWater : room.lastWater) - room.lastWater);
+            const carriedDebt = Number(room.debt || 0); 
+            return Number(room.price) + (usedElec * rates.elec) + (usedWater * rates.water) + Number(rates.service) + carriedDebt;
+        };
+
+        const syncDataToSheets = async (currentData, month, year) => {
+            const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyijDGpAV6NTCCKXpDKqAvd7TIbQF2SIdx0z_J40G4NWNTnvhmfQJwvYOlDxEmNWc-IXA/exec'; // <-- DÁN LINK GOOGLE APPS SCRIPT VÀO ĐÂY
+            if (!SCRIPT_URL) return;
+            const payload = { ...currentData, month: String(month).padStart(2, '0'), year: String(year) };
+            try { 
+                await fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); 
+            } catch (e) {}
+        };
+
+        const TabGhiSo = ({ data, setData, selectedBuilding, setSelectedBuilding, currentMonth, currentYear }) => {
+            const [currentIndex, setCurrentIndex] = useState(0);
+            const tapeRef = useRef(null);
+            const elecRef = useRef(null);
+            const waterRef = useRef(null);
+
+            const filteredRooms = data.rooms.filter(r => r.buildingId === selectedBuilding);
+            const currentRoom = filteredRooms[currentIndex];
+
+            useEffect(() => {
+                if (tapeRef.current) {
+                    const activeBtn = tapeRef.current.querySelector('.active-room');
+                    if (activeBtn) activeBtn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+                }
+            }, [currentIndex, selectedBuilding]);
+
+            useEffect(() => setCurrentIndex(0), [selectedBuilding]);
+
+            const handleInputChange = (roomId, field, value) => {
+                const newData = { ...data, rooms: data.rooms.map(r => r.id === roomId ? { ...r, [field]: value === '' ? null : Number(value) } : r) };
+                setData(newData);
+                saveStorageData(currentMonth, currentYear, newData);
+            };
+
+            const handleNext = () => {
+                syncDataToSheets(data, currentMonth, currentYear);
+                if (currentIndex < filteredRooms.length - 1) {
+                    setCurrentIndex(currentIndex + 1);
+                    setTimeout(() => { if(elecRef.current) elecRef.current.focus(); }, 150);
+                }
+            };
+
+            if (!selectedBuilding) return <div className="p-8 text-center text-gray-400 mt-10">Chưa có khu vực.</div>;
+            if (filteredRooms.length === 0) return <div className="p-8 text-center text-gray-400 mt-10">Khu vực này chưa có phòng.</div>;
+
+            const isFilled = currentRoom && currentRoom.currentElec !== null && currentRoom.currentWater !== null;
+
+            return (
+                <div className="flex flex-col h-full bg-white fade-in">
+                    <div className="bg-white px-4 py-3 border-b border-gray-100 flex-shrink-0">
+                        <select className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3.5 text-lg font-semibold text-gray-800 outline-none" value={selectedBuilding} onChange={e => setSelectedBuilding(e.target.value)}>
+                            {data.buildings.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                        </select>
+                    </div>
+
+                    <div ref={tapeRef} className="flex overflow-x-auto px-4 py-3 gap-2 bg-white border-b border-gray-100 hide-scrollbar flex-shrink-0">
+                        {filteredRooms.map((room, index) => {
+                            const isRoomFilled = room.currentElec !== null && room.currentWater !== null;
+                            const isActive = currentIndex === index;
+                            let btnClass = "flex-shrink-0 w-16 h-16 rounded-xl flex flex-col items-center justify-center font-bold text-lg transition-all border ";
+                            if (isActive) btnClass += "active-room border-gray-900 bg-gray-900 text-white shadow-sm";
+                            else if (isRoomFilled) btnClass += "border-gray-200 bg-gray-50 text-gray-700";
+                            else btnClass += "border-gray-200 bg-white text-gray-400";
+                            return <button key={room.id} onClick={() => setCurrentIndex(index)} className={btnClass}>{room.name}</button>;
+                        })}
+                    </div>
+
+                    {currentRoom && (
+                        <div className="flex-1 px-4 py-6 overflow-y-auto">
+                            <div className="text-center mb-6">
+                                <h2 className="text-3xl font-bold text-gray-900">Phòng {currentRoom.name}</h2>
+                                <p className="text-base text-gray-500 mt-1">{currentRoom.tenant || 'Phòng trống'}</p>
+                            </div>
+                            <div className="space-y-4">
+                                <div className="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm">
+                                    <div className="flex justify-between items-center mb-3">
+                                        <label className="font-semibold text-gray-700 text-sm uppercase">Số Điện</label>
+                                        <span className="text-sm text-gray-400">Cũ: <strong className="text-gray-700">{currentRoom.lastElec}</strong></span>
+                                    </div>
+                                    <input ref={elecRef} type="number" inputMode="numeric" placeholder="Nhập số mới..." className="w-full bg-gray-50 rounded-xl p-4 text-3xl font-bold text-center text-gray-900 border border-gray-200 outline-none focus:border-gray-400" value={currentRoom.currentElec !== null ? currentRoom.currentElec : ''} onChange={e => handleInputChange(currentRoom.id, 'currentElec', e.target.value)} onKeyDown={e => {if(e.key==='Enter'){e.preventDefault(); waterRef.current?.focus();}}} />
+                                </div>
+                                <div className="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm">
+                                    <div className="flex justify-between items-center mb-3">
+                                        <label className="font-semibold text-gray-700 text-sm uppercase">Số Nước</label>
+                                        <span className="text-sm text-gray-400">Cũ: <strong className="text-gray-700">{currentRoom.lastWater}</strong></span>
+                                    </div>
+                                    <input ref={waterRef} type="number" inputMode="numeric" placeholder="Nhập số mới..." className="w-full bg-gray-50 rounded-xl p-4 text-3xl font-bold text-center text-gray-900 border border-gray-200 outline-none focus:border-gray-400" value={currentRoom.currentWater !== null ? currentRoom.currentWater : ''} onChange={e => handleInputChange(currentRoom.id, 'currentWater', e.target.value)} onKeyDown={e => {if(e.key==='Enter'){e.preventDefault(); handleNext();}}} />
+                                </div>
+                            </div>
+                            <button onClick={handleNext} className={`mt-6 w-full py-4 rounded-xl font-bold text-lg flex justify-center items-center gap-2 transition-all ${isFilled ? 'bg-gray-900 text-white shadow-sm' : 'bg-gray-100 text-gray-400'}`}>
+                                {currentIndex < filteredRooms.length - 1 ? 'Lưu & Phòng Tiếp' : 'Hoàn Tất'} <Icon name="arrow-right" className="w-5 h-5" />
+                            </button>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const TabThuTien = ({ data, setData, selectedBuilding, setSelectedBuilding, currentMonth, currentYear }) => {
+            const [toastMsg, setToastMsg] = useState('');
+            const [receiptRoom, setReceiptRoom] = useState(null);
+            const [receiptImgUrl, setReceiptImgUrl] = useState('');
+            const [isGenerating, setIsGenerating] = useState(false);
+            const receiptRef = useRef(null);
+
+            const currentBuilding = data.buildings.find(b => b.id === selectedBuilding);
+            const currentRates = currentBuilding?.rates || { elec: 0, water: 0, service: 0 };
+            const filteredRooms = data.rooms.filter(r => r.buildingId === selectedBuilding);
+            
+            const totalRevenue = filteredRooms.reduce((sum, r) => sum + calculateBaseTotal(r, currentRates), 0);
+            const collectedRevenue = filteredRooms.reduce((sum, r) => {
+                const total = calculateBaseTotal(r, currentRates);
+                const status = r.paymentStatus || 'none';
+                const sub = Number(r.subDebt || 0);
+                if (status === 'paid') return sum + total;
+                if (status === 'debt') return sum + Math.max(0, total - sub);
+                if (status === 'excess') return sum + total + sub;
+                return sum;
+            }, 0);
+
+            const handleCreateReceipt = (room) => {
+                if(!room.phone) { setToastMsg(`Phòng ${room.name} chưa có SĐT!`); setTimeout(() => setToastMsg(''), 2500); return; }
+                setReceiptRoom(room); setReceiptImgUrl(''); setIsGenerating(true);
+                setTimeout(() => generateImage(), 400);
+            };
+
+            const generateImage = async () => {
+                if (!receiptRef.current) return;
+                try {
+                    const canvas = await html2canvas(receiptRef.current, { scale: 2, backgroundColor: '#ffffff' });
+                    setReceiptImgUrl(canvas.toDataURL('image/png'));
+                    setIsGenerating(false);
+                } catch (err) { setIsGenerating(false); }
+            };
+
+            const handleZaloAction = () => {
+                let sdt = receiptRoom.phone;
+                if (sdt.startsWith('0')) sdt = '84' + sdt.slice(1);
+                const r = receiptRoom;
+                const total = calculateBaseTotal(r, currentRates);
+                let textMsg = `HÓA ĐƠN P.${r.name} - Th.${currentMonth}/${currentYear}\nTổng tiền: ${total.toLocaleString('vi-VN')}đ`;
+                window.open(`https://zalo.me/${sdt}?text=${encodeURIComponent(textMsg)}`, '_blank');
+            };
+
+            const handleStatusChange = (roomId, status) => {
+                const targetRoom = data.rooms.find(r => r.id === roomId);
+                const newStatus = targetRoom.paymentStatus === status ? 'none' : status;
+
+                const newData = {
+                    ...data,
+                    rooms: data.rooms.map(r => {
+                        if (r.id === roomId) {
+                            return { ...r, paymentStatus: newStatus, subDebt: newStatus === 'none' ? 0 : (newStatus === 'paid' ? 0 : r.subDebt) };
+                        }
+                        return r;
+                    })
+                };
+                setData(newData);
+                saveStorageData(currentMonth, currentYear, newData);
+                syncDataToSheets(newData, currentMonth, currentYear);
+            };
+
+            const handleSubAmountInput = (roomId, val) => {
+                const num = val === '' ? 0 : Number(val);
+                const newData = {
+                    ...data,
+                    rooms: data.rooms.map(r => r.id === roomId ? { ...r, subDebt: num } : r)
+                };
+                setData(newData);
+                saveStorageData(currentMonth, currentYear, newData);
+                syncDataToSheets(newData, currentMonth, currentYear);
+            };
+
+            if (!selectedBuilding) return <div className="p-8 text-center text-gray-400 mt-10">Chưa có khu vực.</div>;
+
+            return (
+                <div className="flex flex-col h-full bg-white fade-in">
+                    {toastMsg && <div className="fixed top-16 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-5 py-3 rounded-xl shadow-lg z-[100] text-sm font-medium">{toastMsg}</div>}
+
+                    <div className="bg-white p-4 border-b border-gray-100 flex-shrink-0">
+                        <select className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3.5 text-lg font-semibold text-gray-800 outline-none" value={selectedBuilding} onChange={e => setSelectedBuilding(e.target.value)}>
+                            {data.buildings.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                        </select>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto p-4 pb-20">
+                        <div className="bg-gray-50 p-4 rounded-2xl border border-gray-200 mb-4 text-center">
+                            <span className="text-xs font-semibold text-gray-400 tracking-wider uppercase">ĐÃ THU / TỔNG THU</span>
+                            <div className="text-2xl font-bold text-gray-900 mt-1">
+                                <span className="text-gray-900">{collectedRevenue.toLocaleString('vi-VN')}đ</span> 
+                                <span className="text-gray-300 font-light mx-2">/</span> 
+                                <span className="text-gray-400 font-medium">{totalRevenue.toLocaleString('vi-VN')}đ</span>
+                            </div>
+                        </div>
+                        
+                        <div className="space-y-3">
+                            {filteredRooms.map(room => {
+                                const total = calculateBaseTotal(room, currentRates);
+                                const isReady = room.currentElec !== null && room.currentWater !== null;
+                                const status = room.paymentStatus || 'none';
+
+                                return (
+                                    <div key={room.id} className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm">
+                                        <div className="flex justify-between items-start mb-3">
+                                            <div>
+                                                <h4 className="font-bold text-xl text-gray-900">P.{room.name}</h4>
+                                                <p className="text-sm text-gray-500 mt-0.5">{room.tenant || 'Phòng trống'}</p>
+                                            </div>
+                                            <div className="text-right">
+                                                <span className="text-xs text-gray-400 uppercase font-medium">Tổng tiền</span>
+                                                <p className="font-bold text-lg text-gray-900">{total.toLocaleString('vi-VN')}đ</p>
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-3 gap-2 mb-3">
+                                            <button onClick={() => handleStatusChange(room.id, 'paid')} className={`py-2.5 rounded-xl font-semibold text-xs border transition-all ${status === 'paid' ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-700 border-gray-200'}`}>
+                                                ĐỦ TIỀN
+                                            </button>
+                                            <button onClick={() => handleStatusChange(room.id, 'debt')} className={`py-2.5 rounded-xl font-semibold text-xs border transition-all ${status === 'debt' ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-700 border-gray-200'}`}>
+                                                CÒN NỢ
+                                            </button>
+                                            <button onClick={() => handleStatusChange(room.id, 'excess')} className={`py-2.5 rounded-xl font-semibold text-xs border transition-all ${status === 'excess' ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-700 border-gray-200'}`}>
+                                                ĐÓNG DƯ
+                                            </button>
+                                        </div>
+
+                                        {status === 'debt' && (
+                                            <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 mb-3 flex items-center justify-between fade-in">
+                                                <span className="text-xs font-semibold text-gray-600">Trả thiếu (câu sang tháng sau):</span>
+                                                <div className="relative w-1/2">
+                                                    <input type="number" placeholder="Số tiền..." className="w-full bg-white border border-gray-200 p-2 rounded-lg font-bold text-right text-gray-900 outline-none pr-5 text-sm" 
+                                                        value={room.subDebt !== undefined && room.subDebt !== 0 ? room.subDebt : ''} 
+                                                        onChange={e => handleSubAmountInput(room.id, e.target.value)} 
+                                                    />
+                                                    <span className="absolute right-2 top-2 text-gray-400 text-xs">đ</span>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {status === 'excess' && (
+                                            <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 mb-3 flex items-center justify-between fade-in">
+                                                <span className="text-xs font-semibold text-gray-600">Đóng dư (trừ tháng sau):</span>
+                                                <div className="relative w-1/2">
+                                                    <input type="number" placeholder="Số tiền..." className="w-full bg-white border border-gray-200 p-2 rounded-lg font-bold text-right text-gray-900 outline-none pr-5 text-sm" 
+                                                        value={room.subDebt !== undefined && room.subDebt !== 0 ? room.subDebt : ''} 
+                                                        onChange={e => handleSubAmountInput(room.id, e.target.value)} 
+                                                    />
+                                                    <span className="absolute right-2 top-2 text-gray-400 text-xs">đ</span>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        <button onClick={() => handleCreateReceipt(room)} disabled={!isReady || !room.tenant} className={`w-full py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 ${isReady && room.tenant ? 'bg-gray-100 text-gray-800 border border-gray-200 hover:bg-gray-200' : 'bg-gray-50 text-gray-300 border border-gray-100'}`}>
+                                            <Icon name="image" className="w-4 h-4" /> Tạo Hóa Đơn Zalo
+                                        </button>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    {receiptRoom && (
+                        <div className="fixed inset-0 bg-black/60 z-[9999] flex flex-col items-center justify-center p-4 fade-in">
+                            <div className="bg-white w-full max-w-[380px] max-h-[85vh] rounded-2xl overflow-hidden shadow-xl flex flex-col">
+                                <div className="flex justify-between items-center p-4 border-b border-gray-100 bg-white flex-shrink-0">
+                                    <h3 className="font-bold text-base text-gray-900">Hóa Đơn Zalo</h3>
+                                    <button onClick={() => setReceiptRoom(null)} className="p-2 bg-gray-100 rounded-full"><Icon name="x" className="w-4 h-4" /></button>
+                                </div>
+                                <div className="p-4 flex-1 min-h-0 bg-gray-50 overflow-y-auto flex flex-col items-center">
+                                    {isGenerating ? (
+                                        <div className="flex flex-col items-center justify-center h-full text-gray-400 py-10"><Icon name="loader" className="w-6 h-6 animate-spin mb-2" /><p className="text-sm">Đang tạo...</p></div>
+                                    ) : ( receiptImgUrl && <img src={receiptImgUrl} className="w-full h-auto shadow-sm rounded-lg block border border-gray-200" alt="Hóa đơn" /> )}
+                                </div>
+                                <div className="p-4 bg-white space-y-2.5 flex-shrink-0 border-t border-gray-100">
+                                    <button onClick={handleZaloAction} disabled={isGenerating} className="w-full py-3.5 bg-blue-600 text-white font-semibold text-base rounded-xl flex items-center justify-center gap-2 shadow-sm">Mở Khung Chat Zalo</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {receiptRoom && (
+                        <div className="fixed top-[-9999px] left-[-9999px]">
+                            <div ref={receiptRef} className="w-[400px] bg-white p-6 border border-gray-200" style={{ fontFamily: "'Inter', sans-serif" }}>
+                                <div className="text-center mb-5 border-b border-dashed border-gray-200 pb-4">
+                                    <h1 className="text-2xl font-bold text-gray-900">HÓA ĐƠN TIỀN NHÀ</h1>
+                                    <p className="text-gray-500 text-sm mt-0.5">Tháng {currentMonth}/{currentYear}</p>
+                                </div>
+                                <div className="mb-5 bg-gray-50 p-3.5 rounded-xl border border-gray-200 text-sm">
+                                    <div className="flex justify-between mb-1.5"><span className="text-gray-500 font-medium">Phòng:</span><span className="font-bold text-gray-900">{receiptRoom.name}</span></div>
+                                    <div className="flex justify-between"><span className="text-gray-500 font-medium">Khách thuê:</span><span className="font-bold text-gray-900">{receiptRoom.tenant}</span></div>
+                                </div>
+                                <div className="space-y-3 mb-5 text-sm">
+                                    {(() => {
+                                        const r = receiptRoom;
+                                        const newElec = r.currentElec !== null ? r.currentElec : r.lastElec; 
+                                        const newWater = r.currentWater !== null ? r.currentWater : r.lastWater;
+                                        const uE = Math.max(0, newElec - r.lastElec); const uW = Math.max(0, newWater - r.lastWater);
+                                        const tD = uE * currentRates.elec; const tN = uW * currentRates.water;
+                                        const carriedDebt = Number(r.debt || 0);
+                                        return (
+                                            <>
+                                                <div className="flex justify-between items-center"><span className="text-gray-600">1. Tiền phòng</span><span className="font-semibold text-gray-900">{Number(r.price).toLocaleString('vi-VN')}đ</span></div>
+                                                <div className="border-t border-gray-100 pt-2.5"><div className="flex justify-between items-center mb-0.5"><span className="text-gray-600">2. Tiền điện</span><span className="font-semibold text-gray-900">{tD.toLocaleString('vi-VN')}đ</span></div><div className="text-xs text-gray-400">({uE} ký x {currentRates.elec}đ)</div></div>
+                                                <div className="border-t border-gray-100 pt-2.5"><div className="flex justify-between items-center mb-0.5"><span className="text-gray-600">3. Tiền nước</span><span className="font-semibold text-gray-900">{tN.toLocaleString('vi-VN')}đ</span></div><div className="text-xs text-gray-400">({uW} khối x {currentRates.water}đ)</div></div>
+                                                <div className="border-t border-gray-100 pt-2.5 flex justify-between items-center"><span className="text-gray-600">4. Phí Dịch vụ</span><span className="font-semibold text-gray-900">{currentRates.service.toLocaleString('vi-VN')}đ</span></div>
+                                                {carriedDebt !== 0 && (
+                                                    <div className="border-t border-gray-100 pt-2.5 flex justify-between items-center text-gray-800">
+                                                        <span className="font-medium">{carriedDebt > 0 ? '5. Nợ cũ kỳ trước' : '5. Dư cũ kỳ trước'}</span>
+                                                        <span className="font-bold">{carriedDebt > 0 ? Number(carriedDebt).toLocaleString('vi-VN') + 'đ' : '- ' + Math.abs(carriedDebt).toLocaleString('vi-VN') + 'đ'}</span>
+                                                    </div>
+                                                )}
+                                            </>
+                                        );
+                                    })()}
+                                </div>
+                                <div className="mt-5 bg-gray-900 text-white p-4 rounded-xl flex justify-between items-center">
+                                    <span className="text-xs font-semibold text-gray-400 uppercase">Tổng cần thu</span>
+                                    <span className="text-xl font-bold text-white">{calculateBaseTotal(receiptRoom, currentRates).toLocaleString('vi-VN')} đ</span>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const TabCaiDat = ({ data, setData, selectedBuilding, setSelectedBuilding, currentMonth, currentYear }) => {
+            const [bulkPrice, setBulkPrice] = useState('');
+            const currentBuilding = data.buildings.find(b => b.id === selectedBuilding);
+            const filteredRooms = data.rooms.filter(r => r.buildingId === selectedBuilding);
+
+            const handleRate = (field, val) => {
+                if(!currentBuilding) return;
+                const newData = { ...data, buildings: data.buildings.map(b => b.id === selectedBuilding ? { ...b, rates: { ...b.rates, [field]: Number(val) } } : b) };
+                setData(newData); saveStorageData(currentMonth, currentYear, newData); syncDataToSheets(newData, currentMonth, currentYear);
+            };
+
+            const handleBuildingUpdate = (id, newName) => {
+                const newData = { ...data, buildings: data.buildings.map(b => b.id === id ? { ...b, name: newName } : b) };
+                setData(newData); saveStorageData(currentMonth, currentYear, newData); syncDataToSheets(newData, currentMonth, currentYear);
+            };
+            const addBuilding = () => {
+                const newId = 'khu_' + Date.now();
+                const newData = { ...data, buildings: [...data.buildings, { id: newId, name: 'Khu Trọ Mới', rates: { elec: 3500, water: 14000, service: 50000 } }] };
+                setData(newData); setSelectedBuilding(newId); saveStorageData(currentMonth, currentYear, newData); syncDataToSheets(newData, currentMonth, currentYear);
+            };
+            const deleteBuilding = () => {
+                if(!selectedBuilding) return;
+                if(window.confirm(`Xóa toàn bộ ${currentBuilding.name} và các phòng bên trong?`)) {
+                    const newData = { ...data, buildings: data.buildings.filter(b => b.id !== selectedBuilding), rooms: data.rooms.filter(r => r.buildingId !== selectedBuilding) };
+                    setData(newData); saveStorageData(currentMonth, currentYear, newData); syncDataToSheets(newData, currentMonth, currentYear);
+                    setSelectedBuilding(newData.buildings[0]?.id || '');
+                }
+            };
+
+            const handleRoomUpdate = (id, field, val) => {
+                const newData = { ...data, rooms: data.rooms.map(r => r.id === id ? { ...r, [field]: (field === 'price' || field === 'debt') ? (val === '' ? 0 : Number(val)) : val } : r) };
+                setData(newData); saveStorageData(currentMonth, currentYear, newData); syncDataToSheets(newData, currentMonth, currentYear);
+            };
+            const addRoom = () => {
+                if(!selectedBuilding) { alert("Vui lòng thêm Khu Vực trước!"); return; }
+                const newData = { ...data, rooms: [...data.rooms, { id: 'r_' + Date.now(), buildingId: selectedBuilding, name: 'Mới', tenant: '', phone: '', price: 2000000, debt: 0, lastElec: 0, lastWater: 0, currentElec: null, currentWater: null, paymentStatus: 'none', subDebt: 0 }] };
+                setData(newData); saveStorageData(currentMonth, currentYear, newData); syncDataToSheets(newData, currentMonth, currentYear);
+            };
+            const deleteRoom = (id) => {
+                if(window.confirm("Xóa phòng này?")) {
+                    const newData = { ...data, rooms: data.rooms.filter(r => r.id !== id) };
+                    setData(newData); saveStorageData(currentMonth, currentYear, newData); syncDataToSheets(newData, currentMonth, currentYear);
+                }
+            };
+            const applyBulkPrice = () => {
+                if(!bulkPrice || isNaN(bulkPrice)) return;
+                const newData = { ...data, rooms: data.rooms.map(r => r.buildingId === selectedBuilding ? { ...r, price: Number(bulkPrice) } : r) };
+                setData(newData); saveStorageData(currentMonth, currentYear, newData); syncDataToSheets(newData, currentMonth, currentYear);
+                setBulkPrice(''); alert("Đã áp dụng giá mới!");
+            };
+
+            return (
+                <div className="flex flex-col h-full bg-white overflow-y-auto p-4 space-y-6 fade-in pb-20">
+                    <div className="space-y-2">
+                        <div className="flex justify-between items-end mb-1">
+                            <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Chọn Khu Vực</span>
+                            <button onClick={addBuilding} className="text-blue-600 font-semibold text-xs hover:underline">+ Thêm Khu</button>
+                        </div>
+                        {data.buildings.length > 0 ? (
+                            <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+                                <select className="w-full bg-gray-50 p-3.5 text-lg font-semibold text-gray-900 outline-none border-b border-gray-100" value={selectedBuilding} onChange={e => setSelectedBuilding(e.target.value)}>
+                                    {data.buildings.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                                </select>
+                                {currentBuilding && (
+                                    <div className="flex items-center p-2.5 gap-2 bg-white">
+                                        <input value={currentBuilding.name} onChange={e => handleBuildingUpdate(currentBuilding.id, e.target.value)} className="flex-1 bg-gray-50 border border-gray-200 p-2.5 rounded-xl font-medium text-sm outline-none" placeholder="Đổi tên khu..." />
+                                        <button onClick={deleteBuilding} className="p-2.5 bg-gray-100 text-gray-600 rounded-xl hover:bg-gray-200"><Icon name="trash-2" className="w-4 h-4" /></button>
+                                    </div>
+                                )}
+                            </div>
+                        ) : (
+                            <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl text-center text-gray-500 text-sm">Chưa có khu vực nào.</div>
+                        )}
+                    </div>
+
+                    {currentBuilding && (
+                        <>
+                            <div className="space-y-2">
+                                <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Đơn Giá: {currentBuilding.name}</span>
+                                <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-200 space-y-3">
+                                    <div className="flex justify-between items-center"><span className="text-sm font-medium text-gray-600">Điện (1 ký)</span><div className="relative w-1/2"><input type="number" value={currentBuilding.rates.elec} onChange={e => handleRate('elec', e.target.value)} className="w-full bg-gray-50 border border-gray-200 p-2.5 rounded-xl font-bold text-base text-right outline-none pr-6" /><span className="absolute right-2.5 top-2.5 text-gray-400 text-xs font-medium">đ</span></div></div>
+                                    <div className="flex justify-between items-center"><span className="text-sm font-medium text-gray-600">Nước (1 khối)</span><div className="relative w-1/2"><input type="number" value={currentBuilding.rates.water} onChange={e => handleRate('water', e.target.value)} className="w-full bg-gray-50 border border-gray-200 p-2.5 rounded-xl font-bold text-base text-right outline-none pr-6" /><span className="absolute right-2.5 top-2.5 text-gray-400 text-xs font-medium">đ</span></div></div>
+                                    <div className="flex justify-between items-center"><span className="text-sm font-medium text-gray-600">Phí Dịch vụ</span><div className="relative w-1/2"><input type="number" value={currentBuilding.rates.service} onChange={e => handleRate('service', e.target.value)} className="w-full bg-gray-50 border border-gray-200 p-2.5 rounded-xl font-bold text-base text-right outline-none pr-6" /><span className="absolute right-2.5 top-2.5 text-gray-400 text-xs font-medium">đ</span></div></div>
+                                </div>
+                            </div>
+                            <div className="space-y-2">
+                                <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Danh Sách Phòng & Nợ/Dư Kỳ Trước</span>
+                                <div className="bg-gray-50 p-3 rounded-2xl border border-gray-200 flex gap-2">
+                                    <input type="number" placeholder="Set đồng giá phòng..." value={bulkPrice} onChange={e => setBulkPrice(e.target.value)} className="flex-1 bg-white p-2.5 rounded-xl border border-gray-200 font-medium text-sm outline-none" />
+                                    <button onClick={applyBulkPrice} className="bg-gray-900 text-white font-semibold text-xs px-4 rounded-xl">Áp dụng</button>
+                                </div>
+                                <div className="bg-white rounded-2xl border border-gray-200 overflow-x-auto shadow-sm">
+                                    <table className="w-full text-left border-collapse min-w-[550px]">
+                                        <thead>
+                                            <tr className="bg-gray-50 text-gray-500 text-xs border-b border-gray-200">
+                                                <th className="p-3 font-semibold w-16">Phòng</th>
+                                                <th className="p-3 font-semibold w-28">Giá (đ)</th>
+                                                <th className="p-3 font-semibold w-28 text-amber-700">Nợ/Dư cũ</th>
+                                                <th className="p-3 font-semibold w-32">Khách</th>
+                                                <th className="p-3 font-semibold w-24">SĐT</th>
+                                                <th className="p-3 font-semibold w-12 text-center">Xóa</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {filteredRooms.map((room, index) => (
+                                                <tr key={room.id} className="border-b border-gray-100">
+                                                    <td className="p-2"><input value={room.name} onChange={e => handleRoomUpdate(room.id, 'name', e.target.value)} className="w-full bg-gray-50 p-2 rounded-lg font-bold text-sm text-center outline-none" /></td>
+                                                    <td className="p-2"><input type="number" value={room.price} onChange={e => handleRoomUpdate(room.id, 'price', e.target.value)} className="w-full bg-gray-50 border border-gray-200 p-2 rounded-lg font-medium outline-none text-xs" /></td>
+                                                    <td className="p-2"><input type="number" value={room.debt !== undefined ? room.debt : 0} onChange={e => handleRoomUpdate(room.id, 'debt', e.target.value)} className="w-full bg-amber-50 border border-amber-200 p-2 rounded-lg font-bold text-amber-800 outline-none text-xs" /></td>
+                                                    <td className="p-2"><input value={room.tenant} placeholder="Trống" onChange={e => handleRoomUpdate(room.id, 'tenant', e.target.value)} className="w-full bg-gray-50 border border-gray-200 p-2 rounded-lg text-xs outline-none" /></td>
+                                                    <td className="p-2"><input value={room.phone} placeholder="SĐT..." onChange={e => handleRoomUpdate(room.id, 'phone', e.target.value)} className="w-full bg-gray-50 border border-gray-200 p-2 rounded-lg text-xs outline-none" /></td>
+                                                    <td className="p-2 text-center"><button onClick={() => deleteRoom(room.id)} className="text-gray-400 hover:text-gray-700 p-1"><Icon name="trash-2" className="w-4 h-4" /></button></td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                    {filteredRooms.length === 0 && <p className="text-center text-gray-400 text-sm py-6">Khu vực này chưa có phòng.</p>}
+                                    <button onClick={addRoom} className="w-full py-3.5 bg-gray-900 text-white font-semibold text-sm flex items-center justify-center gap-2">
+                                        <Icon name="plus" className="w-4 h-4" /> Thêm Phòng Mới
+                                    </button>
+                                </div>
+                            </div>
+                        </>
+                    )}
+                </div>
+            );
+        };
+
+        const App = () => {
+            const date = new Date();
+            const [currentMonth, setCurrentMonth] = useState(date.getMonth() + 1);
+            const [currentYear, setCurrentYear] = useState(date.getFullYear());
+            
+            const [data, setData] = useState(() => {
+                const saved = loadStorageData(currentMonth, currentYear);
+                return saved ? saved : INITIAL_DATA;
+            });
+
+            const [activeTab, setActiveTab] = useState('ghi_so');
+            const [selectedBuilding, setSelectedBuilding] = useState(data.buildings[0]?.id || '');
+            const [showConfirmNewMonth, setShowConfirmNewMonth] = useState(false);
+
+            useEffect(() => {
+                const saved = loadStorageData(currentMonth, currentYear);
+                if (saved) {
+                    setData(saved);
+                } else {
+                    setData(prev => {
+                        const nextData = {
+                            ...prev,
+                            rooms: prev.rooms.map(r => ({
+                                ...r,
+                                lastElec: r.currentElec !== null ? r.currentElec : r.lastElec,
+                                lastWater: r.currentWater !== null ? r.currentWater : r.lastWater,
+                                currentElec: null,
+                                currentWater: null,
+                                paymentStatus: 'none',
+                                subDebt: 0,
+                                debt: (r.paymentStatus === 'debt' && r.subDebt > 0) ? r.subDebt : ((r.paymentStatus === 'excess' && r.subDebt > 0) ? -r.subDebt : (r.debt || 0))
+                            }))
+                        };
+                        saveStorageData(currentMonth, currentYear, nextData);
+                        return nextData;
+                    });
+                }
+            }, [currentMonth, currentYear]);
+
+            useEffect(() => {
+                if (data.buildings.length > 0 && !data.buildings.find(b => b.id === selectedBuilding)) {
+                    setSelectedBuilding(data.buildings[0].id);
+                }
+            }, [data.buildings, selectedBuilding]);
+
+            const handlePrevMonth = () => {
+                if (currentMonth === 1) { setCurrentMonth(12); setCurrentYear(currentYear - 1); } 
+                else { setCurrentMonth(currentMonth - 1); }
+            };
+
+            const handleNextMonth = () => { setShowConfirmNewMonth(true); };
+
+            const confirmNextMonth = () => {
+                let nextMonth = currentMonth + 1;
+                let nextYear = currentYear;
+                if (nextMonth > 12) { nextMonth = 1; nextYear += 1; }
+
+                const newData = { 
+                    ...data, 
+                    rooms: data.rooms.map(r => {
+                        let currentCarried = Number(r.debt || 0);
+                        if (r.paymentStatus === 'debt' && r.subDebt > 0) currentCarried += Number(r.subDebt);
+                        if (r.paymentStatus === 'excess' && r.subDebt > 0) currentCarried -= Number(r.subDebt);
+
+                        return { 
+                            ...r, 
+                            lastElec: r.currentElec !== null ? r.currentElec : r.lastElec, 
+                            lastWater: r.currentWater !== null ? r.currentWater : r.lastWater, 
+                            currentElec: null, currentWater: null, 
+                            paymentStatus: 'none',
+                            subDebt: 0,
+                            debt: currentCarried 
+                        };
+                    }) 
+                };
+                
+                setCurrentMonth(nextMonth);
+                setCurrentYear(nextYear);
+                setData(newData);
+                saveStorageData(nextMonth, nextYear, newData);
+                setShowConfirmNewMonth(false);
+                syncDataToSheets(newData, nextMonth, nextYear);
+            };
+
+            return (
+                <div className="mobile-container relative">
+                    <div className="bg-gray-900 text-white flex justify-between items-center px-4 py-3 z-50 flex-shrink-0">
+                        <button onClick={handlePrevMonth} className="p-1.5 hover:bg-gray-800 rounded-lg"><Icon name="chevron-left" className="w-5 h-5" /></button>
+                        <h1 className="font-semibold text-sm tracking-wider">THÁNG {currentMonth} / {currentYear}</h1>
+                        <button onClick={handleNextMonth} className="p-1.5 hover:bg-gray-800 rounded-lg"><Icon name="chevron-right" className="w-5 h-5" /></button>
+                    </div>
+
+                    {showConfirmNewMonth && (
+                        <div className="fixed inset-0 bg-black/50 z-[9999] flex items-center justify-center p-4 backdrop-blur-sm">
+                            <div className="bg-white p-6 rounded-2xl max-w-sm w-full shadow-lg border border-gray-100">
+                                <h3 className="text-lg font-bold text-gray-900 mb-2">Chuyển sang tháng mới?</h3>
+                                <p className="text-gray-500 text-sm mb-6 leading-relaxed">Hệ thống sẽ chuyển số Mới thành số Cũ và cộng dồn tiền Nợ/Dư sang kỳ tiếp theo.</p>
+                                <div className="flex gap-2">
+                                    <button onClick={() => setShowConfirmNewMonth(false)} className="flex-1 py-3 bg-gray-100 rounded-xl font-semibold text-sm text-gray-600">Hủy</button>
+                                    <button onClick={confirmNextMonth} className="flex-1 py-3 bg-gray-900 rounded-xl font-semibold text-sm text-white">Đồng ý</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="flex-1 min-h-0 relative">
+                        {activeTab === 'ghi_so' && <TabGhiSo data={data} setData={setData} selectedBuilding={selectedBuilding} setSelectedBuilding={setSelectedBuilding} currentMonth={currentMonth} currentYear={currentYear} />}
+                        {activeTab === 'thu_tien' && <TabThuTien data={data} setData={setData} selectedBuilding={selectedBuilding} setSelectedBuilding={setSelectedBuilding} currentMonth={currentMonth} currentYear={currentYear} />}
+                        {activeTab === 'cai_dat' && <TabCaiDat data={data} setData={setData} selectedBuilding={selectedBuilding} setSelectedBuilding={setSelectedBuilding} currentMonth={currentMonth} currentYear={currentYear} />}
+                    </div>
+
+                    <div className="bg-white border-t border-gray-200 flex justify-around py-2 z-[90] flex-shrink-0">
+                        <button onClick={() => setActiveTab('ghi_so')} className={`flex flex-col items-center py-1.5 px-4 rounded-xl transition-all ${activeTab === 'ghi_so' ? 'text-gray-900 font-bold' : 'text-gray-400 font-medium'}`}>
+                            <Icon name="book-open" className="w-5 h-5 mb-1" />
+                            <span className="text-[11px] uppercase tracking-wide">Ghi Số</span>
+                        </button>
+                        <button onClick={() => setActiveTab('thu_tien')} className={`flex flex-col items-center py-1.5 px-4 rounded-xl transition-all ${activeTab === 'thu_tien' ? 'text-gray-900 font-bold' : 'text-gray-400 font-medium'}`}>
+                            <Icon name="wallet" className="w-5 h-5 mb-1" />
+                            <span className="text-[11px] uppercase tracking-wide">Tính Tiền</span>
+                        </button>
+                        <button onClick={() => setActiveTab('cai_dat')} className={`flex flex-col items-center py-1.5 px-4 rounded-xl transition-all ${activeTab === 'cai_dat' ? 'text-gray-900 font-bold' : 'text-gray-400 font-medium'}`}>
+                            <Icon name="settings" className="w-5 h-5 mb-1" />
+                            <span className="text-[11px] uppercase tracking-wide">Cài Đặt</span>
+                        </button>
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
