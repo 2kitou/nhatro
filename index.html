@@ -16,8 +16,7 @@
         body {
             font-family: 'Inter', sans-serif;
             background-color: #f3f4f6;
-            margin: 0;
-            padding: 0;
+            margin: 0; padding: 0;
             -webkit-tap-highlight-color: transparent;
             color: #111827;
         }
@@ -25,10 +24,8 @@
             max-width: 480px;
             margin: 0 auto;
             background-color: #ffffff;
-            height: 100vh;
-            height: 100dvh; 
-            display: flex;
-            flex-direction: column;
+            height: 100vh; height: 100dvh; 
+            display: flex; flex-direction: column;
             box-shadow: 0 0 20px rgba(0,0,0,0.05);
             overflow: hidden; 
         }
@@ -36,7 +33,6 @@
         .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; scroll-behavior: smooth; }
         .fade-in { animation: fadeIn 0.15s ease-in-out; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        
         input[type=number]::-webkit-inner-spin-button, 
         input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
         input, button, select { font-size: 16px; }
@@ -51,9 +47,7 @@
         const loadStorageData = (m, y) => {
             const key = `nhatro_data_${y}_${m}`;
             const saved = localStorage.getItem(key);
-            if (saved) {
-                try { return JSON.parse(saved); } catch(e) {}
-            }
+            if (saved) { try { return JSON.parse(saved); } catch(e) {} }
             return null;
         };
 
@@ -64,7 +58,7 @@
 
         const INITIAL_DATA = {
             buildings: [
-                { id: 'khu_a', name: 'Quỳnh Thi cũ', rates: { elec: 3500, water: 14000, service: 50000 } }
+                { id: 'khu_a', name: 'Quỳnh Thi', rates: { elec: 3500, water: 14000, service: 50000 } }
             ],
             rooms: [
                 { id: 'a101', buildingId: 'khu_a', name: '101', tenant: 'Quỳnh Thi', phone: '0901234567', price: 1000000, debt: 0, lastElec: 1250, lastWater: 120, currentElec: null, currentWater: null, paymentStatus: 'none', subDebt: 0 }
@@ -557,28 +551,23 @@
             const [selectedBuilding, setSelectedBuilding] = useState(data.buildings[0]?.id || '');
             const [showConfirmNewMonth, setShowConfirmNewMonth] = useState(false);
 
+            // Tự động kéo dữ liệu từ Google Sheets về khi đổi tháng
             useEffect(() => {
                 const saved = loadStorageData(currentMonth, currentYear);
                 if (saved) {
                     setData(saved);
                 } else {
-                    setData(prev => {
-                        const nextData = {
-                            ...prev,
-                            rooms: prev.rooms.map(r => ({
-                                ...r,
-                                lastElec: r.currentElec !== null ? r.currentElec : r.lastElec,
-                                lastWater: r.currentWater !== null ? r.currentWater : r.lastWater,
-                                currentElec: null,
-                                currentWater: null,
-                                paymentStatus: 'none',
-                                subDebt: 0,
-                                debt: (r.paymentStatus === 'debt' && r.subDebt > 0) ? r.subDebt : ((r.paymentStatus === 'excess' && r.subDebt > 0) ? -r.subDebt : (r.debt || 0))
-                            }))
-                        };
-                        saveStorageData(currentMonth, currentYear, nextData);
-                        return nextData;
-                    });
+                    const SCRIPT_URL = ''; // <-- DÁN LINK GOOGLE APPS SCRIPT VÀO ĐÂY
+                    if (SCRIPT_URL) {
+                        fetch(`${SCRIPT_URL}?month=${currentMonth}&year=${currentYear}`)
+                            .then(res => res.json())
+                            .then(resData => {
+                                if (resData && resData.rooms) {
+                                    setData(resData);
+                                    saveStorageData(currentMonth, currentYear, resData);
+                                }
+                            }).catch(e => {});
+                    }
                 }
             }, [currentMonth, currentYear]);
 
