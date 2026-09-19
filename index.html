@@ -553,56 +553,89 @@
             const [showConfirmNewMonth, setShowConfirmNewMonth] = useState(false);
 
             // BỘ NÃO ĐỌC DỮ LIỆU BẢNG 2 CHIỀU TỪ GOOGLE SHEETS
-            useEffect(() => {
-                const saved = loadStorageData(currentMonth, currentYear);
-                if (saved) setData(saved);
+        useEffect(() => {
+            const saved = loadStorageData(currentMonth, currentYear);
+            if (saved) setData(saved);
 
-                if (SCRIPT_URL) {
-                    // Thêm tham số &t=... để ép trình duyệt không lưu cache, luôn lấy số liệu mới nhất
-                    fetch(`${SCRIPT_URL}?month=${currentMonth}&year=${currentYear}&t=${new Date().getTime()}`)
-                        .then(res => res.json())
-                        .then(rawSheetData => {
-                            // Nếu dữ liệu trả về đúng là 1 mảng (Bảng Google Sheets)
-                            if (Array.isArray(rawSheetData) && rawSheetData.length > 1) {
-                                setData(prevData => {
-                                    const newData = { ...prevData };
-                                    const newRooms = [...newData.rooms];
-                                    
-                                    // Chạy từ dòng 2 (index 1) để bỏ qua tiêu đề cột
-                                    for (let i = 1; i < rawSheetData.length; i++) {
-                                        const row = rawSheetData[i];
-                                        const bName = row[1];
-                                        const rName = String(row[2]).replace("Phòng ", "").trim();
-                                        
-                                        // Tìm ID khu vực
-                                        const bIndex = newData.buildings.findIndex(b => b.name === bName);
-                                        if (bIndex === -1) continue;
-                                        const bId = newData.buildings[bIndex].id;
-                                        
-                                        // Tìm Phòng để lắp ráp dữ liệu
-                                        const rIndex = newRooms.findIndex(r => r.buildingId === bId && r.name == rName);
-                                        if (rIndex !== -1) {
-                                            newRooms[rIndex] = {
-                                                ...newRooms[rIndex],
-                                                tenant: row[3] || "",
-                                                phone: row[4] || "",
-                                                lastElec: row[5] !== "" ? Number(row[5]) : 0,
-                                                currentElec: row[6] !== "" ? Number(row[6]) : null,
-                                                lastWater: row[7] !== "" ? Number(row[7]) : 0,
-                                                currentWater: row[8] !== "" ? Number(row[8]) : null,
-                                                price: row[9] !== "" ? Number(row[9]) : newRooms[rIndex].price,
-                                                debt: row[11] !== "" ? Number(row[11]) : 0
-                                            };
-                                        }
+            if (SCRIPT_URL) {
+                // Thêm tham số &t=... để ép trình duyệt không lưu cache, luôn lấy số liệu mới nhất
+                fetch(`${SCRIPT_URL}?month=${currentMonth}&year=${currentYear}&t=${new Date().getTime()}`)
+                    .then(res => res.json())
+                    .then(rawSheetData => {
+                        // Kiểm tra nếu dữ liệu trả về đúng là mảng 2 chiều
+                        if (Array.isArray(rawSheetData) && rawSheetData.length > 1) {
+                            setData(prevData => {
+                                const newData = { ...prevData };
+                                const newRooms = [...newData.rooms];
+                                const newBuildings = [...newData.buildings];
+
+                                let currentBuildingName = ""; // Biến nhớ tên khu vực
+                                let currentBuildingId = "";
+
+                                // Bỏ qua dòng đầu tiên (tiêu đề)
+                                for (let i = 1; i < rawSheetData.length; i++) {
+                                    const row = rawSheetData[i];
+
+                                    // Lấy tên khu vực. Nếu ô rỗng (do merge), dùng tên khu vực trước đó
+                                    const bName = row[1] ? String(row[1]).trim() : currentBuildingName;
+                                    currentBuildingName = bName;
+
+                                    if (!bName) continue; // Bỏ qua nếu không xác định được khu vực
+
+                                    const rName = String(row[2]).replace("Phòng ", "").trim();
+
+                                    // 1. TÌM HOẶC TẠO KHU VỰC
+                                    let bIndex = newBuildings.findIndex(b => b.name === bName);
+                                    if (bIndex === -1) {
+                                        currentBuildingId = 'khu_' + Date.now() + Math.random().toString(36).substr(2, 5);
+                                        newBuildings.push({
+                                            id: currentBuildingId,
+                                            name: bName,
+                                            rates: { elec: 3500, water: 14000, service: Number(row[10]) || 50000 } // Tạm lấy phí dịch vụ từ sheet
+                                        });
+                                    } else {
+                                        currentBuildingId = newBuildings[bIndex].id;
                                     }
-                                    newData.rooms = newRooms;
-                                    saveStorageData(currentMonth, currentYear, newData);
-                                    return newData;
-                                });
-                            }
-                        }).catch(e => { console.log("Lỗi đồng bộ:", e); });
-                }
-            }, [currentMonth, currentYear]);
+
+                                    // 2. TÌM HOẶC TẠO PHÒNG
+                                    let rIndex = newRooms.findIndex(r => r.buildingId === currentBuildingId && r.name === rName);
+                                    
+                                    const roomData = {
+                                        tenant: row[3] || "",
+                                        phone: row[4] || "",
+                                        lastElec: row[5] !== "" ? Number(row[5]) : 0,
+                                        currentElec: row[6] !== "" ? Number(row[6]) : null,
+                                        lastWater: row[7] !== "" ? Number(row[7]) : 0,
+                                        currentWater: row[8] !== "" ? Number(row[8]) : null,
+                                        price: row[9] !== "" ? Number(row[9]) : 0,
+                                        debt: row[11] !== "" ? Number(row[11]) : 0
+                                    };
+
+                                    if (rIndex !== -1) {
+                                        // Cập nhật phòng đã có
+                                        newRooms[rIndex] = { ...newRooms[rIndex], ...roomData };
+                                    } else {
+                                        // Thêm phòng mới nếu chưa có trên giao diện
+                                        newRooms.push({
+                                            id: 'r_' + Date.now() + Math.random().toString(36).substr(2, 5),
+                                            buildingId: currentBuildingId,
+                                            name: rName,
+                                            ...roomData,
+                                            paymentStatus: 'none',
+                                            subDebt: 0
+                                        });
+                                    }
+                                }
+
+                                newData.buildings = newBuildings;
+                                newData.rooms = newRooms;
+                                saveStorageData(currentMonth, currentYear, newData);
+                                return newData;
+                            });
+                        }
+                    }).catch(e => { console.log("Lỗi đồng bộ:", e); });
+            }
+        }, [currentMonth, currentYear]);
 
             useEffect(() => {
                 if (data.buildings.length > 0 && !data.buildings.find(b => b.id === selectedBuilding)) {
