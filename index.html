@@ -13,28 +13,13 @@
     
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #f3f4f6;
-            margin: 0; padding: 0;
-            -webkit-tap-highlight-color: transparent;
-            color: #111827;
-        }
-        .mobile-container {
-            max-width: 480px;
-            margin: 0 auto;
-            background-color: #ffffff;
-            height: 100vh; height: 100dvh; 
-            display: flex; flex-direction: column;
-            box-shadow: 0 0 20px rgba(0,0,0,0.05);
-            overflow: hidden; 
-        }
+        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; color: #111827; }
+        .mobile-container { max-width: 480px; margin: 0 auto; background-color: #ffffff; height: 100vh; height: 100dvh; display: flex; flex-direction: column; box-shadow: 0 0 20px rgba(0,0,0,0.05); overflow: hidden; }
         .hide-scrollbar::-webkit-scrollbar { display: none; }
         .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; scroll-behavior: smooth; }
         .fade-in { animation: fadeIn 0.15s ease-in-out; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        input[type=number]::-webkit-inner-spin-button, 
-        input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
         input, button, select { font-size: 16px; }
     </style>
 </head>
@@ -45,7 +30,7 @@
         const { useState, useEffect, useRef, useCallback } = React;
         
         // ⚠️ DÁN LINK WEB APP CỦA GOOGLE APPS SCRIPT VÀO ĐÂY
-        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyijDGpAV6NTCCKXpDKqAvd7TIbQF2SIdx0z_J40G4NWNTnvhmfQJwvYOlDxEmNWc-IXA/exec'; 
+        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby.../exec'; 
 
         const loadStorageData = (m, y) => {
             const key = `nhatro_data_${y}_${m}`;
@@ -59,14 +44,7 @@
             localStorage.setItem(key, JSON.stringify(data));
         };
 
-        const INITIAL_DATA = {
-            buildings: [
-                { id: 'khu_a', name: 'Khu Trọ Mới', rates: { elec: 3500, water: 14000, service: 50000 } }
-            ],
-            rooms: [
-                { id: 'r_1', buildingId: 'khu_a', name: '101', tenant: '', phone: '', price: 1500000, debt: 0, lastElec: 0, lastWater: 0, currentElec: null, currentWater: null, paymentStatus: 'none', subDebt: 0 }
-            ]
-        };
+        const INITIAL_DATA = { buildings: [{ id: 'khu_a', name: 'Khu Trọ', rates: { elec: 3500, water: 14000, service: 50000 } }], rooms: [{ id: 'r_1', buildingId: 'khu_a', name: '101', tenant: '', phone: '', price: 1500000, debt: 0, lastElec: 0, lastWater: 0, currentElec: null, currentWater: null, paymentStatus: 'none', subDebt: 0 }] };
 
         const Icon = ({ name, className }) => {
             const spanRef = useRef(null);
@@ -79,7 +57,6 @@
             return <span ref={spanRef} style={{ display: 'contents' }}></span>;
         };
 
-        // ĐÃ SỬA: Không yêu cầu có tên khách (room.tenant) mới tính tiền nữa
         const calculateBaseTotal = (room, rates) => {
             if (!rates) return 0;
             const usedElec = Math.max(0, (room.currentElec !== null ? room.currentElec : room.lastElec) - room.lastElec);
@@ -110,10 +87,10 @@
                 const newData = { ...data, rooms: data.rooms.map(r => r.id === roomId ? { ...r, [field]: value === '' ? null : Number(value) } : r) };
                 setData(newData);
                 saveStorageData(currentMonth, currentYear, newData);
+                syncToSheets(newData); // Kích hoạt đồng bộ ngay khi gõ
             };
 
             const handleNext = () => {
-                syncToSheets(data); // Tự động đẩy lên khi xong phòng
                 if (currentIndex < filteredRooms.length - 1) {
                     setCurrentIndex(currentIndex + 1);
                     setTimeout(() => { if(elecRef.current) elecRef.current.focus(); }, 150);
@@ -157,14 +134,14 @@
                                         <label className="font-semibold text-gray-700 text-sm uppercase">Số Điện</label>
                                         <span className="text-sm text-gray-400">Cũ: <strong className="text-gray-700">{currentRoom.lastElec}</strong></span>
                                     </div>
-                                    <input ref={elecRef} type="number" inputMode="numeric" placeholder="Nhập số mới..." className="w-full bg-gray-50 rounded-xl p-4 text-3xl font-bold text-center text-gray-900 border border-gray-200 outline-none focus:border-gray-400" value={currentRoom.currentElec !== null ? currentRoom.currentElec : ''} onChange={e => handleInputChange(currentRoom.id, 'currentElec', e.target.value)} onKeyDown={e => {if(e.key==='Enter'){e.preventDefault(); waterRef.current?.focus();}}} onBlur={() => syncToSheets(data)}/>
+                                    <input ref={elecRef} type="number" inputMode="numeric" placeholder="Nhập số mới..." className="w-full bg-gray-50 rounded-xl p-4 text-3xl font-bold text-center text-gray-900 border border-gray-200 outline-none focus:border-gray-400" value={currentRoom.currentElec !== null ? currentRoom.currentElec : ''} onChange={e => handleInputChange(currentRoom.id, 'currentElec', e.target.value)} onKeyDown={e => {if(e.key==='Enter'){e.preventDefault(); waterRef.current?.focus();}}} />
                                 </div>
                                 <div className="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm">
                                     <div className="flex justify-between items-center mb-3">
                                         <label className="font-semibold text-gray-700 text-sm uppercase">Số Nước</label>
                                         <span className="text-sm text-gray-400">Cũ: <strong className="text-gray-700">{currentRoom.lastWater}</strong></span>
                                     </div>
-                                    <input ref={waterRef} type="number" inputMode="numeric" placeholder="Nhập số mới..." className="w-full bg-gray-50 rounded-xl p-4 text-3xl font-bold text-center text-gray-900 border border-gray-200 outline-none focus:border-gray-400" value={currentRoom.currentWater !== null ? currentRoom.currentWater : ''} onChange={e => handleInputChange(currentRoom.id, 'currentWater', e.target.value)} onKeyDown={e => {if(e.key==='Enter'){e.preventDefault(); handleNext();}}} onBlur={() => syncToSheets(data)}/>
+                                    <input ref={waterRef} type="number" inputMode="numeric" placeholder="Nhập số mới..." className="w-full bg-gray-50 rounded-xl p-4 text-3xl font-bold text-center text-gray-900 border border-gray-200 outline-none focus:border-gray-400" value={currentRoom.currentWater !== null ? currentRoom.currentWater : ''} onChange={e => handleInputChange(currentRoom.id, 'currentWater', e.target.value)} onKeyDown={e => {if(e.key==='Enter'){e.preventDefault(); handleNext();}}} />
                                 </div>
                             </div>
                             <button onClick={handleNext} className={`mt-6 w-full py-4 rounded-xl font-bold text-lg flex justify-center items-center gap-2 transition-all ${isFilled ? 'bg-gray-900 text-white shadow-sm' : 'bg-gray-100 text-gray-400'}`}>
@@ -229,25 +206,17 @@
                 const newData = {
                     ...data,
                     rooms: data.rooms.map(r => {
-                        if (r.id === roomId) {
-                            return { ...r, paymentStatus: newStatus, subDebt: newStatus === 'none' ? 0 : (newStatus === 'paid' ? 0 : r.subDebt) };
-                        }
+                        if (r.id === roomId) return { ...r, paymentStatus: newStatus, subDebt: newStatus === 'none' ? 0 : (newStatus === 'paid' ? 0 : r.subDebt) };
                         return r;
                     })
                 };
-                setData(newData);
-                saveStorageData(currentMonth, currentYear, newData);
-                syncToSheets(newData); // Đồng bộ ngay lập tức
+                setData(newData); saveStorageData(currentMonth, currentYear, newData); syncToSheets(newData);
             };
 
             const handleSubAmountInput = (roomId, val) => {
                 const num = val === '' ? 0 : Number(val);
-                const newData = {
-                    ...data,
-                    rooms: data.rooms.map(r => r.id === roomId ? { ...r, subDebt: num } : r)
-                };
-                setData(newData);
-                saveStorageData(currentMonth, currentYear, newData);
+                const newData = { ...data, rooms: data.rooms.map(r => r.id === roomId ? { ...r, subDebt: num } : r) };
+                setData(newData); saveStorageData(currentMonth, currentYear, newData); syncToSheets(newData);
             };
 
             if (!selectedBuilding) return <div className="p-8 text-center text-gray-400 mt-10">Chưa có khu vực.</div>;
@@ -310,7 +279,6 @@
                                                     <input type="number" placeholder="Số tiền..." className="w-full bg-white border border-gray-200 p-2 rounded-lg font-bold text-right text-gray-900 outline-none pr-5 text-sm" 
                                                         value={room.subDebt !== undefined && room.subDebt !== 0 ? room.subDebt : ''} 
                                                         onChange={e => handleSubAmountInput(room.id, e.target.value)}
-                                                        onBlur={() => syncToSheets(data)}
                                                     />
                                                     <span className="absolute right-2 top-2 text-gray-400 text-xs">đ</span>
                                                 </div>
@@ -324,14 +292,12 @@
                                                     <input type="number" placeholder="Số tiền..." className="w-full bg-white border border-gray-200 p-2 rounded-lg font-bold text-right text-gray-900 outline-none pr-5 text-sm" 
                                                         value={room.subDebt !== undefined && room.subDebt !== 0 ? room.subDebt : ''} 
                                                         onChange={e => handleSubAmountInput(room.id, e.target.value)} 
-                                                        onBlur={() => syncToSheets(data)}
                                                     />
                                                     <span className="absolute right-2 top-2 text-gray-400 text-xs">đ</span>
                                                 </div>
                                             </div>
                                         )}
                                         
-                                        {/* ĐÃ SỬA: Nút tạo bill không yêu cầu tên khách */}
                                         <button onClick={() => handleCreateReceipt(room)} disabled={!isReady} className={`w-full py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 ${isReady ? 'bg-gray-100 text-gray-800 border border-gray-200 hover:bg-gray-200' : 'bg-gray-50 text-gray-300 border border-gray-100'}`}>
                                             <Icon name="image" className="w-4 h-4" /> Tạo Hóa Đơn Zalo
                                         </button>
@@ -414,12 +380,12 @@
             const handleRate = (field, val) => {
                 if(!currentBuilding) return;
                 const newData = { ...data, buildings: data.buildings.map(b => b.id === selectedBuilding ? { ...b, rates: { ...b.rates, [field]: Number(val) } } : b) };
-                setData(newData); saveStorageData(currentMonth, currentYear, newData); 
+                setData(newData); saveStorageData(currentMonth, currentYear, newData); syncToSheets(newData);
             };
 
             const handleBuildingUpdate = (id, newName) => {
                 const newData = { ...data, buildings: data.buildings.map(b => b.id === id ? { ...b, name: newName } : b) };
-                setData(newData); saveStorageData(currentMonth, currentYear, newData);
+                setData(newData); saveStorageData(currentMonth, currentYear, newData); syncToSheets(newData);
             };
             const addBuilding = () => {
                 const newId = 'khu_' + Date.now();
@@ -437,7 +403,7 @@
 
             const handleRoomUpdate = (id, field, val) => {
                 const newData = { ...data, rooms: data.rooms.map(r => r.id === id ? { ...r, [field]: (field === 'price' || field === 'debt') ? (val === '' ? 0 : Number(val)) : val } : r) };
-                setData(newData); saveStorageData(currentMonth, currentYear, newData); 
+                setData(newData); saveStorageData(currentMonth, currentYear, newData); syncToSheets(newData);
             };
             const addRoom = () => {
                 if(!selectedBuilding) { alert("Vui lòng thêm Khu Vực trước!"); return; }
@@ -471,7 +437,7 @@
                                 </select>
                                 {currentBuilding && (
                                     <div className="flex items-center p-2.5 gap-2 bg-white">
-                                        <input value={currentBuilding.name} onChange={e => handleBuildingUpdate(currentBuilding.id, e.target.value)} onBlur={() => syncToSheets(data)} className="flex-1 bg-gray-50 border border-gray-200 p-2.5 rounded-xl font-medium text-sm outline-none" placeholder="Đổi tên khu..." />
+                                        <input value={currentBuilding.name} onChange={e => handleBuildingUpdate(currentBuilding.id, e.target.value)} className="flex-1 bg-gray-50 border border-gray-200 p-2.5 rounded-xl font-medium text-sm outline-none" placeholder="Đổi tên khu..." />
                                         <button onClick={deleteBuilding} className="p-2.5 bg-gray-100 text-gray-600 rounded-xl hover:bg-gray-200"><Icon name="trash-2" className="w-4 h-4" /></button>
                                     </div>
                                 )}
@@ -486,9 +452,9 @@
                             <div className="space-y-2">
                                 <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Đơn Giá: {currentBuilding.name}</span>
                                 <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-200 space-y-3">
-                                    <div className="flex justify-between items-center"><span className="text-sm font-medium text-gray-600">Điện (1 ký)</span><div className="relative w-1/2"><input type="number" value={currentBuilding.rates.elec} onChange={e => handleRate('elec', e.target.value)} onBlur={() => syncToSheets(data)} className="w-full bg-gray-50 border border-gray-200 p-2.5 rounded-xl font-bold text-base text-right outline-none pr-6" /><span className="absolute right-2.5 top-2.5 text-gray-400 text-xs font-medium">đ</span></div></div>
-                                    <div className="flex justify-between items-center"><span className="text-sm font-medium text-gray-600">Nước (1 khối)</span><div className="relative w-1/2"><input type="number" value={currentBuilding.rates.water} onChange={e => handleRate('water', e.target.value)} onBlur={() => syncToSheets(data)} className="w-full bg-gray-50 border border-gray-200 p-2.5 rounded-xl font-bold text-base text-right outline-none pr-6" /><span className="absolute right-2.5 top-2.5 text-gray-400 text-xs font-medium">đ</span></div></div>
-                                    <div className="flex justify-between items-center"><span className="text-sm font-medium text-gray-600">Phí Dịch vụ</span><div className="relative w-1/2"><input type="number" value={currentBuilding.rates.service} onChange={e => handleRate('service', e.target.value)} onBlur={() => syncToSheets(data)} className="w-full bg-gray-50 border border-gray-200 p-2.5 rounded-xl font-bold text-base text-right outline-none pr-6" /><span className="absolute right-2.5 top-2.5 text-gray-400 text-xs font-medium">đ</span></div></div>
+                                    <div className="flex justify-between items-center"><span className="text-sm font-medium text-gray-600">Điện (1 ký)</span><div className="relative w-1/2"><input type="number" value={currentBuilding.rates.elec} onChange={e => handleRate('elec', e.target.value)} className="w-full bg-gray-50 border border-gray-200 p-2.5 rounded-xl font-bold text-base text-right outline-none pr-6" /><span className="absolute right-2.5 top-2.5 text-gray-400 text-xs font-medium">đ</span></div></div>
+                                    <div className="flex justify-between items-center"><span className="text-sm font-medium text-gray-600">Nước (1 khối)</span><div className="relative w-1/2"><input type="number" value={currentBuilding.rates.water} onChange={e => handleRate('water', e.target.value)} className="w-full bg-gray-50 border border-gray-200 p-2.5 rounded-xl font-bold text-base text-right outline-none pr-6" /><span className="absolute right-2.5 top-2.5 text-gray-400 text-xs font-medium">đ</span></div></div>
+                                    <div className="flex justify-between items-center"><span className="text-sm font-medium text-gray-600">Phí Dịch vụ</span><div className="relative w-1/2"><input type="number" value={currentBuilding.rates.service} onChange={e => handleRate('service', e.target.value)} className="w-full bg-gray-50 border border-gray-200 p-2.5 rounded-xl font-bold text-base text-right outline-none pr-6" /><span className="absolute right-2.5 top-2.5 text-gray-400 text-xs font-medium">đ</span></div></div>
                                 </div>
                             </div>
                             <div className="space-y-2">
@@ -512,11 +478,11 @@
                                         <tbody>
                                             {filteredRooms.map((room, index) => (
                                                 <tr key={room.id} className="border-b border-gray-100">
-                                                    <td className="p-2"><input value={room.name} onChange={e => handleRoomUpdate(room.id, 'name', e.target.value)} onBlur={() => syncToSheets(data)} className="w-full bg-gray-50 p-2 rounded-lg font-bold text-sm text-center outline-none" /></td>
-                                                    <td className="p-2"><input type="number" value={room.price} onChange={e => handleRoomUpdate(room.id, 'price', e.target.value)} onBlur={() => syncToSheets(data)} className="w-full bg-gray-50 border border-gray-200 p-2 rounded-lg font-medium outline-none text-xs" /></td>
-                                                    <td className="p-2"><input type="number" value={room.debt !== undefined ? room.debt : 0} onChange={e => handleRoomUpdate(room.id, 'debt', e.target.value)} onBlur={() => syncToSheets(data)} className="w-full bg-amber-50 border border-amber-200 p-2 rounded-lg font-bold text-amber-800 outline-none text-xs" /></td>
-                                                    <td className="p-2"><input value={room.tenant} placeholder="Trống" onChange={e => handleRoomUpdate(room.id, 'tenant', e.target.value)} onBlur={() => syncToSheets(data)} className="w-full bg-gray-50 border border-gray-200 p-2 rounded-lg text-xs outline-none" /></td>
-                                                    <td className="p-2"><input value={room.phone} placeholder="SĐT..." onChange={e => handleRoomUpdate(room.id, 'phone', e.target.value)} onBlur={() => syncToSheets(data)} className="w-full bg-gray-50 border border-gray-200 p-2 rounded-lg text-xs outline-none" /></td>
+                                                    <td className="p-2"><input value={room.name} onChange={e => handleRoomUpdate(room.id, 'name', e.target.value)} className="w-full bg-gray-50 p-2 rounded-lg font-bold text-sm text-center outline-none" /></td>
+                                                    <td className="p-2"><input type="number" value={room.price} onChange={e => handleRoomUpdate(room.id, 'price', e.target.value)} className="w-full bg-gray-50 border border-gray-200 p-2 rounded-lg font-medium outline-none text-xs" /></td>
+                                                    <td className="p-2"><input type="number" value={room.debt !== undefined ? room.debt : 0} onChange={e => handleRoomUpdate(room.id, 'debt', e.target.value)} className="w-full bg-amber-50 border border-amber-200 p-2 rounded-lg font-bold text-amber-800 outline-none text-xs" /></td>
+                                                    <td className="p-2"><input value={room.tenant} placeholder="Trống" onChange={e => handleRoomUpdate(room.id, 'tenant', e.target.value)} className="w-full bg-gray-50 border border-gray-200 p-2 rounded-lg text-xs outline-none" /></td>
+                                                    <td className="p-2"><input value={room.phone} placeholder="SĐT..." onChange={e => handleRoomUpdate(room.id, 'phone', e.target.value)} className="w-full bg-gray-50 border border-gray-200 p-2 rounded-lg text-xs outline-none" /></td>
                                                     <td className="p-2 text-center"><button onClick={() => deleteRoom(room.id)} className="text-gray-400 hover:text-gray-700 p-1"><Icon name="trash-2" className="w-4 h-4" /></button></td>
                                                 </tr>
                                             ))}
@@ -538,23 +504,17 @@
             const date = new Date();
             const [currentMonth, setCurrentMonth] = useState(date.getMonth() + 1);
             const [currentYear, setCurrentYear] = useState(date.getFullYear());
-            
-            const [data, setData] = useState(() => {
-                const saved = loadStorageData(currentMonth, currentYear);
-                return saved ? saved : INITIAL_DATA;
-            });
-
+            const [data, setData] = useState(() => { const saved = loadStorageData(currentMonth, currentYear); return saved ? saved : INITIAL_DATA; });
             const [activeTab, setActiveTab] = useState('ghi_so');
             const [selectedBuilding, setSelectedBuilding] = useState(data.buildings[0]?.id || '');
             const [showConfirmNewMonth, setShowConfirmNewMonth] = useState(false);
-            const [syncStatus, setSyncStatus] = useState({ text: 'Đã lưu', color: 'text-green-400' });
+            const [syncStatus, setSyncStatus] = useState({ text: 'Sẵn sàng', color: 'text-green-400' });
             
-            // Timeout Ref để chống spam gọi Sheets liên tục khi gõ
             const syncTimeout = useRef(null);
 
-            // Hàm ĐẨY dữ liệu lên (Push)
+            // Hàm GỬI TỰ ĐỘNG
             const syncToSheets = useCallback(async (currentData, month = currentMonth, year = currentYear) => {
-                if (!SCRIPT_URL) return;
+                if (!SCRIPT_URL || SCRIPT_URL.includes("...")) return;
                 setSyncStatus({ text: 'Đang lưu...', color: 'text-yellow-400' });
                 const payload = { ...currentData, month: String(month).padStart(2, '0'), year: String(year) };
                 
@@ -562,21 +522,18 @@
                 syncTimeout.current = setTimeout(async () => {
                     try { 
                         await fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); 
-                        setSyncStatus({ text: 'Đã đồng bộ Sheet', color: 'text-green-400' });
-                        setTimeout(() => setSyncStatus({ text: '', color: '' }), 3000);
-                    } catch (e) {
-                        setSyncStatus({ text: 'Lỗi đồng bộ', color: 'text-red-400' });
-                    }
-                }, 1000); // Đợi ngừng gõ 1 giây mới đẩy
+                        setSyncStatus({ text: 'Đã lưu', color: 'text-green-400' });
+                        setTimeout(() => setSyncStatus({ text: '', color: '' }), 2500);
+                    } catch (e) { setSyncStatus({ text: 'Lỗi mạng', color: 'text-red-400' }); }
+                }, 800); // Ngừng gõ 0.8 giây là gửi luôn
             }, [currentMonth, currentYear]);
 
-            // Hàm KÉO dữ liệu về (Fetch/Pull) khi mở/đổi tháng
+            // KẾ TOÁN NỘI SUY (ĐỌC TỪ SHEET VỀ)
             const fetchDataFromSheet = async (month, year) => {
-                if (!SCRIPT_URL) return;
-                setSyncStatus({ text: 'Đang lấy dữ liệu...', color: 'text-blue-400' });
+                if (!SCRIPT_URL || SCRIPT_URL.includes("...")) return;
+                setSyncStatus({ text: 'Đang tải...', color: 'text-blue-400' });
                 try {
-                    const ts = new Date().getTime();
-                    const res = await fetch(`${SCRIPT_URL}?month=${month}&year=${year}&t=${ts}`);
+                    const res = await fetch(`${SCRIPT_URL}?month=${month}&year=${year}&t=${Date.now()}`);
                     const resData = await res.json();
                     
                     if (Array.isArray(resData) && resData.length > 1) {
@@ -589,127 +546,88 @@
                             if (row[1]) currentBuildingName = buildingName;
                             
                             const roomNameRaw = String(row[2]).replace('Phòng ', '').trim();
-                            const tenant = String(row[3]);
-                            const phone = String(row[4]);
-                            const lastElec = Number(row[5]);
-                            const currentElec = row[6] === "" ? null : Number(row[6]);
-                            const lastWater = row[7];
-                            const currentWater = row[8] === "" ? null : Number(row[8]);
-                            const price = Number(row[9]);
+                            const tenant = String(row[3]); const phone = String(row[4]);
+                            const lastElec = Number(row[5]); const currentElec = row[6] === "" ? null : Number(row[6]);
+                            const lastWater = row[7]; const currentWater = row[8] === "" ? null : Number(row[8]);
+                            const price = Number(row[9]); const debt = Number(row[11]);
                             
-                            // Phí Khác (row 10) bị bỏ qua hoặc bạn lưu dạng object tuỳ thiết kế, ở đây lấy mặc định từ code cũ
-                            const debt = Number(row[11]);
+                            // THUẬT TOÁN KẾ TOÁN NGƯỢC
+                            const daThanhToanSheet = row[12];
+                            const tongTienSheet = Number(row[13]) || 0;
+                            let computedStatus = 'none';
+                            let computedSubDebt = 0;
                             
-                            // Tìm Khu Vực
-                            let b = parsedData.buildings.find(b => b.name === buildingName);
-                            if (!b) {
-                                b = { id: 'b_' + Date.now() + i, name: buildingName, rates: { elec: 3500, water: 14000, service: 50000 } };
-                                parsedData.buildings.push(b);
+                            if (daThanhToanSheet !== "" && daThanhToanSheet !== null && daThanhToanSheet !== undefined) {
+                                const paidNum = Number(daThanhToanSheet);
+                                if (paidNum === tongTienSheet && tongTienSheet > 0) {
+                                    computedStatus = 'paid';
+                                } else if (paidNum < tongTienSheet) {
+                                    computedStatus = 'debt';
+                                    computedSubDebt = tongTienSheet - paidNum;
+                                } else if (paidNum > tongTienSheet) {
+                                    computedStatus = 'excess';
+                                    computedSubDebt = paidNum - tongTienSheet;
+                                } else if (paidNum === 0 && tongTienSheet > 0) {
+                                    computedStatus = 'none';
+                                }
                             }
+
+                            let b = parsedData.buildings.find(b => b.name === buildingName);
+                            if (!b) { b = { id: 'b_' + Date.now() + i, name: buildingName, rates: { elec: 3500, water: 14000, service: 50000 } }; parsedData.buildings.push(b); }
                             
-                            // Tìm Phòng
                             let rIndex = parsedData.rooms.findIndex(r => r.name === roomNameRaw && r.buildingId === b.id);
                             if (rIndex >= 0) {
-                                parsedData.rooms[rIndex] = { ...parsedData.rooms[rIndex], tenant, phone, price, lastElec, currentElec, lastWater, currentWater, debt };
+                                parsedData.rooms[rIndex] = { ...parsedData.rooms[rIndex], tenant, phone, price, lastElec, currentElec, lastWater, currentWater, debt, paymentStatus: computedStatus, subDebt: computedSubDebt };
                             } else {
-                                parsedData.rooms.push({
-                                    id: 'r_' + Date.now() + i, buildingId: b.id, name: roomNameRaw, tenant, phone, price, debt, lastElec, currentElec, lastWater, currentWater, paymentStatus: 'none', subDebt: 0
-                                });
+                                parsedData.rooms.push({ id: 'r_' + Date.now() + i, buildingId: b.id, name: roomNameRaw, tenant, phone, price, debt, lastElec, currentElec, lastWater, currentWater, paymentStatus: computedStatus, subDebt: computedSubDebt });
                             }
                         }
-                        setData(parsedData);
-                        saveStorageData(month, year, parsedData);
-                        setSyncStatus({ text: 'Đã cập nhật mới', color: 'text-green-400' });
-                        setTimeout(() => setSyncStatus({ text: '', color: '' }), 3000);
+                        setData(parsedData); saveStorageData(month, year, parsedData);
+                        setSyncStatus({ text: 'Dữ liệu mới nhất', color: 'text-green-400' });
+                        setTimeout(() => setSyncStatus({ text: '', color: '' }), 2500);
                         return true;
                     }
-                } catch (e) {
-                    setSyncStatus({ text: 'Không kết nối được', color: 'text-red-400' });
-                }
+                } catch (e) { setSyncStatus({ text: 'Lỗi tải Sheet', color: 'text-red-400' }); }
                 return false;
             };
 
-            // Tự động kéo dữ liệu khi đổi tháng hoặc khi bật/quay lại trang web
             useEffect(() => {
                 fetchDataFromSheet(currentMonth, currentYear);
-                
-                // Lắng nghe sự kiện chuyển tab trình duyệt
-                const handleVisibilityChange = () => {
-                    if (document.visibilityState === 'visible') {
-                        fetchDataFromSheet(currentMonth, currentYear);
-                    }
-                };
+                const handleVisibilityChange = () => { if (document.visibilityState === 'visible') fetchDataFromSheet(currentMonth, currentYear); };
                 document.addEventListener('visibilitychange', handleVisibilityChange);
                 return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
             }, [currentMonth, currentYear]);
 
-            useEffect(() => {
-                if (data.buildings.length > 0 && !data.buildings.find(b => b.id === selectedBuilding)) {
-                    setSelectedBuilding(data.buildings[0].id);
-                }
-            }, [data.buildings, selectedBuilding]);
+            useEffect(() => { if (data.buildings.length > 0 && !data.buildings.find(b => b.id === selectedBuilding)) setSelectedBuilding(data.buildings[0].id); }, [data.buildings, selectedBuilding]);
 
-            const handlePrevMonth = () => {
-                if (currentMonth === 1) { setCurrentMonth(12); setCurrentYear(currentYear - 1); } 
-                else { setCurrentMonth(currentMonth - 1); }
-            };
-
-            // Bấm qua tháng mới: Sẽ được hỏi nếu chưa có dữ liệu, nếu có rồi thì nó tự fetch (useEffect ở trên lo)
+            const handlePrevMonth = () => { if (currentMonth === 1) { setCurrentMonth(12); setCurrentYear(currentYear - 1); } else { setCurrentMonth(currentMonth - 1); } };
             const handleNextMonth = () => { setShowConfirmNewMonth(true); };
-
             const confirmNextMonth = () => {
-                let nextMonth = currentMonth + 1;
-                let nextYear = currentYear;
+                let nextMonth = currentMonth + 1; let nextYear = currentYear;
                 if (nextMonth > 12) { nextMonth = 1; nextYear += 1; }
-
                 const newData = { 
                     ...data, 
                     rooms: data.rooms.map(r => {
                         let currentCarried = Number(r.debt || 0);
                         if (r.paymentStatus === 'debt' && r.subDebt > 0) currentCarried += Number(r.subDebt);
                         if (r.paymentStatus === 'excess' && r.subDebt > 0) currentCarried -= Number(r.subDebt);
-
-                        return { 
-                            ...r, 
-                            lastElec: r.currentElec !== null ? r.currentElec : r.lastElec, 
-                            lastWater: r.currentWater !== null ? r.currentWater : r.lastWater, 
-                            currentElec: null, currentWater: null, 
-                            paymentStatus: 'none',
-                            subDebt: 0,
-                            debt: currentCarried 
-                        };
+                        return { ...r, lastElec: r.currentElec !== null ? r.currentElec : r.lastElec, lastWater: r.currentWater !== null ? r.currentWater : r.lastWater, currentElec: null, currentWater: null, paymentStatus: 'none', subDebt: 0, debt: currentCarried };
                     }) 
                 };
-                
-                setCurrentMonth(nextMonth);
-                setCurrentYear(nextYear);
-                setData(newData);
-                saveStorageData(nextMonth, nextYear, newData);
-                setShowConfirmNewMonth(false);
-                syncToSheets(newData, nextMonth, nextYear);
+                setCurrentMonth(nextMonth); setCurrentYear(nextYear); setData(newData); saveStorageData(nextMonth, nextYear, newData); setShowConfirmNewMonth(false); syncToSheets(newData, nextMonth, nextYear);
             };
 
             return (
                 <div className="mobile-container relative">
                     <div className="bg-gray-900 text-white flex justify-between items-center px-4 py-3 z-50 flex-shrink-0">
                         <button onClick={handlePrevMonth} className="p-1.5 hover:bg-gray-800 rounded-lg"><Icon name="chevron-left" className="w-5 h-5" /></button>
-                        <div className="text-center">
-                            <h1 className="font-semibold text-sm tracking-wider">THÁNG {currentMonth} / {currentYear}</h1>
-                            {syncStatus.text && <p className={`text-[10px] font-medium mt-0.5 ${syncStatus.color}`}>{syncStatus.text}</p>}
-                        </div>
+                        <div className="text-center"><h1 className="font-semibold text-sm tracking-wider">THÁNG {currentMonth} / {currentYear}</h1>{syncStatus.text && <p className={`text-[10px] font-medium mt-0.5 ${syncStatus.color}`}>{syncStatus.text}</p>}</div>
                         <button onClick={handleNextMonth} className="p-1.5 hover:bg-gray-800 rounded-lg"><Icon name="chevron-right" className="w-5 h-5" /></button>
                     </div>
 
                     {showConfirmNewMonth && (
                         <div className="fixed inset-0 bg-black/50 z-[9999] flex items-center justify-center p-4 backdrop-blur-sm">
-                            <div className="bg-white p-6 rounded-2xl max-w-sm w-full shadow-lg border border-gray-100">
-                                <h3 className="text-lg font-bold text-gray-900 mb-2">Chuyển sang tháng mới?</h3>
-                                <p className="text-gray-500 text-sm mb-6 leading-relaxed">Hệ thống sẽ chuyển số Mới thành số Cũ và cộng dồn tiền Nợ/Dư sang kỳ tiếp theo.</p>
-                                <div className="flex gap-2">
-                                    <button onClick={() => setShowConfirmNewMonth(false)} className="flex-1 py-3 bg-gray-100 rounded-xl font-semibold text-sm text-gray-600">Hủy</button>
-                                    <button onClick={confirmNextMonth} className="flex-1 py-3 bg-gray-900 rounded-xl font-semibold text-sm text-white">Đồng ý</button>
-                                </div>
-                            </div>
+                            <div className="bg-white p-6 rounded-2xl max-w-sm w-full shadow-lg border border-gray-100"><h3 className="text-lg font-bold text-gray-900 mb-2">Chuyển sang tháng mới?</h3><p className="text-gray-500 text-sm mb-6 leading-relaxed">Hệ thống sẽ chuyển số Mới thành số Cũ và cộng dồn tiền Nợ/Dư sang kỳ tiếp theo.</p><div className="flex gap-2"><button onClick={() => setShowConfirmNewMonth(false)} className="flex-1 py-3 bg-gray-100 rounded-xl font-semibold text-sm text-gray-600">Hủy</button><button onClick={confirmNextMonth} className="flex-1 py-3 bg-gray-900 rounded-xl font-semibold text-sm text-white">Đồng ý</button></div></div>
                         </div>
                     )}
 
@@ -720,25 +638,14 @@
                     </div>
 
                     <div className="bg-white border-t border-gray-200 flex justify-around py-2 z-[90] flex-shrink-0">
-                        <button onClick={() => setActiveTab('ghi_so')} className={`flex flex-col items-center py-1.5 px-4 rounded-xl transition-all ${activeTab === 'ghi_so' ? 'text-gray-900 font-bold' : 'text-gray-400 font-medium'}`}>
-                            <Icon name="book-open" className="w-5 h-5 mb-1" />
-                            <span className="text-[11px] uppercase tracking-wide">Ghi Số</span>
-                        </button>
-                        <button onClick={() => setActiveTab('thu_tien')} className={`flex flex-col items-center py-1.5 px-4 rounded-xl transition-all ${activeTab === 'thu_tien' ? 'text-gray-900 font-bold' : 'text-gray-400 font-medium'}`}>
-                            <Icon name="wallet" className="w-5 h-5 mb-1" />
-                            <span className="text-[11px] uppercase tracking-wide">Tính Tiền</span>
-                        </button>
-                        <button onClick={() => setActiveTab('cai_dat')} className={`flex flex-col items-center py-1.5 px-4 rounded-xl transition-all ${activeTab === 'cai_dat' ? 'text-gray-900 font-bold' : 'text-gray-400 font-medium'}`}>
-                            <Icon name="settings" className="w-5 h-5 mb-1" />
-                            <span className="text-[11px] uppercase tracking-wide">Cài Đặt</span>
-                        </button>
+                        <button onClick={() => setActiveTab('ghi_so')} className={`flex flex-col items-center py-1.5 px-4 rounded-xl transition-all ${activeTab === 'ghi_so' ? 'text-gray-900 font-bold' : 'text-gray-400 font-medium'}`}><Icon name="book-open" className="w-5 h-5 mb-1" /><span className="text-[11px] uppercase tracking-wide">Ghi Số</span></button>
+                        <button onClick={() => setActiveTab('thu_tien')} className={`flex flex-col items-center py-1.5 px-4 rounded-xl transition-all ${activeTab === 'thu_tien' ? 'text-gray-900 font-bold' : 'text-gray-400 font-medium'}`}><Icon name="wallet" className="w-5 h-5 mb-1" /><span className="text-[11px] uppercase tracking-wide">Tính Tiền</span></button>
+                        <button onClick={() => setActiveTab('cai_dat')} className={`flex flex-col items-center py-1.5 px-4 rounded-xl transition-all ${activeTab === 'cai_dat' ? 'text-gray-900 font-bold' : 'text-gray-400 font-medium'}`}><Icon name="settings" className="w-5 h-5 mb-1" /><span className="text-[11px] uppercase tracking-wide">Cài Đặt</span></button>
                     </div>
                 </div>
             );
         };
-
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
+        const root = ReactDOM.createRoot(document.getElementById('root')); root.render(<App />);
     </script>
 </body>
 </html>
