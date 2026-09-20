@@ -146,7 +146,7 @@
             const [receiptRoom, setReceiptRoom] = useState(null);
             const [receiptImgUrl, setReceiptImgUrl] = useState('');
             const [isGenerating, setIsGenerating] = useState(false);
-            const [copyState, setCopyState] = useState('idle'); // 'idle' hoặc 'copied'
+            const [copyState, setCopyState] = useState('idle'); 
             const receiptRef = useRef(null);
 
             const currentBuilding = data.buildings.find(b => b.id === selectedBuilding);
@@ -166,10 +166,7 @@
 
             const handleCreateReceipt = (room) => {
                 if(!room.phone) { setToastMsg(`Phòng ${room.name} chưa nhập SĐT!`); setTimeout(() => setToastMsg(''), 2500); return; }
-                setReceiptRoom(room); 
-                setReceiptImgUrl(''); 
-                setIsGenerating(true);
-                setCopyState('idle'); // Reset trạng thái copy
+                setReceiptRoom(room); setReceiptImgUrl(''); setIsGenerating(true); setCopyState('idle');
                 setTimeout(() => generateImage(), 400);
             };
 
@@ -182,29 +179,39 @@
                 } catch (err) { setIsGenerating(false); }
             };
 
-            // BƯỚC 1: COPY ẢNH
+            // BƯỚC 1: COPY ẢNH VÀO CLIPBOARD (Kỹ thuật vượt tường lửa iOS WebKit)
             const handleCopyAction = async () => {
                 try {
-                    const response = await fetch(receiptImgUrl);
-                    const blob = await response.blob();
-                    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-                    setToastMsg('Đã copy ảnh! Hãy bấm nút 2 để Mở Zalo.');
+                    const makeImagePromise = async () => {
+                        const response = await fetch(receiptImgUrl);
+                        return await response.blob();
+                    };
+                    
+                    // Safari iOS yêu cầu phải gọi new ClipboardItem với Promise để không bị timeout chặn
+                    await navigator.clipboard.write([
+                        new window.ClipboardItem({
+                            'image/png': makeImagePromise()
+                        })
+                    ]);
+                    
+                    setToastMsg('Đã copy Hóa đơn! Hãy bấm Mở Zalo.');
                     setCopyState('copied');
                 } catch (err) {
-                    console.log('Trình duyệt chặn copy clipboard:', err);
-                    setToastMsg('Máy chặn Copy. Vui lòng CHẠM GIỮ ẢNH để Copy!');
-                    setCopyState('copied'); // Vẫn cho phép mở Zalo
+                    console.log('Trình duyệt chặn Copy:', err);
+                    setToastMsg('Vui lòng CHẠM GIỮ ẢNH để Copy!');
+                    setCopyState('copied'); 
                 }
                 setTimeout(() => setToastMsg(''), 3000);
             };
 
-            // BƯỚC 2: MỞ ZALO
+            // BƯỚC 2: MỞ ZALO SẠCH SẼ CHUẨN XÁC
             const handleOpenZaloAction = () => {
-                let sdt = receiptRoom.phone;
+                // Loại bỏ tất cả khoảng trắng hoặc ký tự lạ trong SĐT
+                let sdt = receiptRoom.phone.replace(/[^0-9]/g, ''); 
                 if (sdt.startsWith('0')) sdt = '84' + sdt.slice(1);
-                const total = calculateBaseTotal(receiptRoom, currentRates);
-                let textMsg = `HÓA ĐƠN P.${receiptRoom.name} - Th.${currentMonth}/${currentYear}\nTổng tiền: ${total.toLocaleString('vi-VN')}đ`;
-                window.open(`https://zalo.me/${sdt}?text=${encodeURIComponent(textMsg)}`, '_blank');
+                
+                // Dùng location.href thay vì window.open để mở trực tiếp App Zalo, tránh bị trình duyệt chặn Popup
+                window.location.href = `https://zalo.me/${sdt}`;
             };
 
             const handleShareNative = async () => {
@@ -215,7 +222,7 @@
                     if (navigator.canShare && navigator.canShare({ files: [file] })) {
                         await navigator.share({ files: [file], title: `Hóa Đơn P.${receiptRoom.name}` });
                     } else {
-                        setToastMsg('Trình duyệt không hỗ trợ Gửi Trực Tiếp!');
+                        setToastMsg('Trình duyệt không hỗ trợ!');
                         setTimeout(() => setToastMsg(''), 2500);
                     }
                 } catch (err) {}
@@ -344,9 +351,6 @@
                                             <Icon name="send" className="w-4 h-4" /> 2. Mở Zalo (Vào chat ấn Dán)
                                         </button>
                                     )}
-                                    <button onClick={handleShareNative} disabled={isGenerating} className="w-full py-2.5 bg-gray-50 text-gray-600 font-medium text-xs rounded-xl border border-gray-200 flex justify-center items-center gap-2">
-                                        <Icon name="share" className="w-3.5 h-3.5" /> Hoặc: Gửi bằng Native Share
-                                    </button>
                                 </div>
                             </div>
                         </div>
