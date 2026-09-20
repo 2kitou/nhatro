@@ -29,6 +29,7 @@
     <script type="text/babel">
         const { useState, useEffect, useRef, useCallback } = React;
         
+        // ĐÃ GẮN SẴN LINK THẬT CỦA BẠN
         const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyijDGpAV6NTCCKXpDKqAvd7TIbQF2SIdx0z_J40G4NWNTnvhmfQJwvYOlDxEmNWc-IXA/exec'; 
 
         const loadStorageData = (m, y) => {
@@ -145,6 +146,7 @@
             const [receiptRoom, setReceiptRoom] = useState(null);
             const [receiptImgUrl, setReceiptImgUrl] = useState('');
             const [isGenerating, setIsGenerating] = useState(false);
+            const [copyState, setCopyState] = useState('idle'); // 'idle' hoặc 'copied'
             const receiptRef = useRef(null);
 
             const currentBuilding = data.buildings.find(b => b.id === selectedBuilding);
@@ -164,7 +166,10 @@
 
             const handleCreateReceipt = (room) => {
                 if(!room.phone) { setToastMsg(`Phòng ${room.name} chưa nhập SĐT!`); setTimeout(() => setToastMsg(''), 2500); return; }
-                setReceiptRoom(room); setReceiptImgUrl(''); setIsGenerating(true);
+                setReceiptRoom(room); 
+                setReceiptImgUrl(''); 
+                setIsGenerating(true);
+                setCopyState('idle'); // Reset trạng thái copy
                 setTimeout(() => generateImage(), 400);
             };
 
@@ -177,13 +182,43 @@
                 } catch (err) { setIsGenerating(false); }
             };
 
-            const handleZaloAction = () => {
+            // BƯỚC 1: COPY ẢNH
+            const handleCopyAction = async () => {
+                try {
+                    const response = await fetch(receiptImgUrl);
+                    const blob = await response.blob();
+                    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+                    setToastMsg('Đã copy ảnh! Hãy bấm nút 2 để Mở Zalo.');
+                    setCopyState('copied');
+                } catch (err) {
+                    console.log('Trình duyệt chặn copy clipboard:', err);
+                    setToastMsg('Máy chặn Copy. Vui lòng CHẠM GIỮ ẢNH để Copy!');
+                    setCopyState('copied'); // Vẫn cho phép mở Zalo
+                }
+                setTimeout(() => setToastMsg(''), 3000);
+            };
+
+            // BƯỚC 2: MỞ ZALO
+            const handleOpenZaloAction = () => {
                 let sdt = receiptRoom.phone;
                 if (sdt.startsWith('0')) sdt = '84' + sdt.slice(1);
-                const r = receiptRoom;
-                const total = calculateBaseTotal(r, currentRates);
-                let textMsg = `HÓA ĐƠN P.${r.name} - Th.${currentMonth}/${currentYear}\nTổng tiền: ${total.toLocaleString('vi-VN')}đ`;
+                const total = calculateBaseTotal(receiptRoom, currentRates);
+                let textMsg = `HÓA ĐƠN P.${receiptRoom.name} - Th.${currentMonth}/${currentYear}\nTổng tiền: ${total.toLocaleString('vi-VN')}đ`;
                 window.open(`https://zalo.me/${sdt}?text=${encodeURIComponent(textMsg)}`, '_blank');
+            };
+
+            const handleShareNative = async () => {
+                try {
+                    const response = await fetch(receiptImgUrl);
+                    const blob = await response.blob();
+                    const file = new File([blob], `HoaDon_P${receiptRoom.name}.png`, { type: 'image/png' });
+                    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                        await navigator.share({ files: [file], title: `Hóa Đơn P.${receiptRoom.name}` });
+                    } else {
+                        setToastMsg('Trình duyệt không hỗ trợ Gửi Trực Tiếp!');
+                        setTimeout(() => setToastMsg(''), 2500);
+                    }
+                } catch (err) {}
             };
 
             const handleStatusChange = (roomId, status) => {
@@ -203,12 +238,14 @@
 
             return (
                 <div className="flex flex-col h-full bg-white fade-in">
-                    {toastMsg && <div className="fixed top-16 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-5 py-3 rounded-xl shadow-lg z-[100] text-sm font-medium">{toastMsg}</div>}
+                    {toastMsg && <div className="fixed top-16 left-1/2 transform -translate-x-1/2 w-11/12 max-w-sm bg-gray-900 text-white px-5 py-3 rounded-xl shadow-lg z-[100] text-sm font-medium text-center">{toastMsg}</div>}
+
                     <div className="bg-white p-4 border-b border-gray-100 flex-shrink-0">
                         <select className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3.5 text-lg font-semibold text-gray-800 outline-none" value={selectedBuilding} onChange={e => setSelectedBuilding(e.target.value)}>
                             {data.buildings.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                         </select>
                     </div>
+
                     <div className="flex-1 overflow-y-auto p-4 pb-20">
                         <div className="bg-gray-50 p-4 rounded-2xl border border-gray-200 mb-4 text-center">
                             <span className="text-xs font-semibold text-gray-400 tracking-wider uppercase">ĐÃ THU / TỔNG THU</span>
@@ -218,6 +255,7 @@
                                 <span className="text-gray-400 font-medium">{totalRevenue.toLocaleString('vi-VN')}đ</span>
                             </div>
                         </div>
+                        
                         <div className="space-y-3">
                             {filteredRooms.map(room => {
                                 const total = calculateBaseTotal(room, currentRates);
@@ -227,21 +265,57 @@
                                 return (
                                     <div key={room.id} className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm">
                                         <div className="flex justify-between items-start mb-3">
-                                            <div><h4 className="font-bold text-xl text-gray-900">P.{room.name}</h4><p className="text-sm text-gray-500 mt-0.5">{room.tenant || 'Chưa nhập tên'}</p></div>
-                                            <div className="text-right"><span className="text-xs text-gray-400 uppercase font-medium">Tổng tiền</span><p className="font-bold text-lg text-gray-900">{total.toLocaleString('vi-VN')}đ</p></div>
+                                            <div>
+                                                <h4 className="font-bold text-xl text-gray-900">P.{room.name}</h4>
+                                                <p className="text-sm text-gray-500 mt-0.5">{room.tenant || 'Chưa nhập tên'}</p>
+                                            </div>
+                                            <div className="text-right">
+                                                <span className="text-xs text-gray-400 uppercase font-medium">Tổng tiền</span>
+                                                <p className="font-bold text-lg text-gray-900">{total.toLocaleString('vi-VN')}đ</p>
+                                            </div>
                                         </div>
+
                                         <div className="grid grid-cols-3 gap-2 mb-3">
-                                            <button onClick={() => handleStatusChange(room.id, 'paid')} className={`py-2.5 rounded-xl font-semibold text-xs border transition-all ${status === 'paid' ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-700 border-gray-200'}`}>ĐỦ TIỀN</button>
-                                            <button onClick={() => handleStatusChange(room.id, 'debt')} className={`py-2.5 rounded-xl font-semibold text-xs border transition-all ${status === 'debt' ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-700 border-gray-200'}`}>CÒN NỢ</button>
-                                            <button onClick={() => handleStatusChange(room.id, 'excess')} className={`py-2.5 rounded-xl font-semibold text-xs border transition-all ${status === 'excess' ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-700 border-gray-200'}`}>ĐÓNG DƯ</button>
+                                            <button onClick={() => handleStatusChange(room.id, 'paid')} className={`py-2.5 rounded-xl font-semibold text-xs border transition-all ${status === 'paid' ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-700 border-gray-200'}`}>
+                                                ĐỦ TIỀN
+                                            </button>
+                                            <button onClick={() => handleStatusChange(room.id, 'debt')} className={`py-2.5 rounded-xl font-semibold text-xs border transition-all ${status === 'debt' ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-700 border-gray-200'}`}>
+                                                CÒN NỢ
+                                            </button>
+                                            <button onClick={() => handleStatusChange(room.id, 'excess')} className={`py-2.5 rounded-xl font-semibold text-xs border transition-all ${status === 'excess' ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-700 border-gray-200'}`}>
+                                                ĐÓNG DƯ
+                                            </button>
                                         </div>
+
                                         {status === 'debt' && (
-                                            <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 mb-3 flex items-center justify-between fade-in"><span className="text-xs font-semibold text-gray-600">Trả thiếu (câu sang tháng sau):</span><div className="relative w-1/2"><input type="number" placeholder="Số tiền..." className="w-full bg-white border border-gray-200 p-2 rounded-lg font-bold text-right text-gray-900 outline-none pr-5 text-sm" value={room.subDebt !== undefined && room.subDebt !== 0 ? room.subDebt : ''} onChange={e => handleSubAmountInput(room.id, e.target.value)} /><span className="absolute right-2 top-2 text-gray-400 text-xs">đ</span></div></div>
+                                            <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 mb-3 flex items-center justify-between fade-in">
+                                                <span className="text-xs font-semibold text-gray-600">Trả thiếu (nợ sang tháng sau):</span>
+                                                <div className="relative w-1/2">
+                                                    <input type="number" placeholder="Số tiền..." className="w-full bg-white border border-gray-200 p-2 rounded-lg font-bold text-right text-gray-900 outline-none pr-5 text-sm" 
+                                                        value={room.subDebt !== undefined && room.subDebt !== 0 ? room.subDebt : ''} 
+                                                        onChange={e => handleSubAmountInput(room.id, e.target.value)}
+                                                    />
+                                                    <span className="absolute right-2 top-2 text-gray-400 text-xs">đ</span>
+                                                </div>
+                                            </div>
                                         )}
+
                                         {status === 'excess' && (
-                                            <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 mb-3 flex items-center justify-between fade-in"><span className="text-xs font-semibold text-gray-600">Đóng dư (trừ tháng sau):</span><div className="relative w-1/2"><input type="number" placeholder="Số tiền..." className="w-full bg-white border border-gray-200 p-2 rounded-lg font-bold text-right text-gray-900 outline-none pr-5 text-sm" value={room.subDebt !== undefined && room.subDebt !== 0 ? room.subDebt : ''} onChange={e => handleSubAmountInput(room.id, e.target.value)} /><span className="absolute right-2 top-2 text-gray-400 text-xs">đ</span></div></div>
+                                            <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 mb-3 flex items-center justify-between fade-in">
+                                                <span className="text-xs font-semibold text-gray-600">Đóng dư (trừ tiền tháng sau):</span>
+                                                <div className="relative w-1/2">
+                                                    <input type="number" placeholder="Số tiền..." className="w-full bg-white border border-gray-200 p-2 rounded-lg font-bold text-right text-gray-900 outline-none pr-5 text-sm" 
+                                                        value={room.subDebt !== undefined && room.subDebt !== 0 ? room.subDebt : ''} 
+                                                        onChange={e => handleSubAmountInput(room.id, e.target.value)} 
+                                                    />
+                                                    <span className="absolute right-2 top-2 text-gray-400 text-xs">đ</span>
+                                                </div>
+                                            </div>
                                         )}
-                                        <button onClick={() => handleCreateReceipt(room)} disabled={!isReady} className={`w-full py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 ${isReady ? 'bg-gray-100 text-gray-800 border border-gray-200 hover:bg-gray-200' : 'bg-gray-50 text-gray-300 border border-gray-100'}`}><Icon name="image" className="w-4 h-4" /> Tạo Hóa Đơn Zalo</button>
+                                        
+                                        <button onClick={() => handleCreateReceipt(room)} disabled={!isReady} className={`w-full py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 ${isReady ? 'bg-gray-100 text-gray-800 border border-gray-200 hover:bg-gray-200' : 'bg-gray-50 text-gray-300 border border-gray-100'}`}>
+                                            <Icon name="image" className="w-4 h-4" /> Tạo Hóa Đơn Zalo
+                                        </button>
                                     </div>
                                 );
                             })}
@@ -251,9 +325,29 @@
                     {receiptRoom && (
                         <div className="fixed inset-0 bg-black/60 z-[9999] flex flex-col items-center justify-center p-4 fade-in">
                             <div className="bg-white w-full max-w-[380px] max-h-[85vh] rounded-2xl overflow-hidden shadow-xl flex flex-col">
-                                <div className="flex justify-between items-center p-4 border-b border-gray-100 bg-white flex-shrink-0"><h3 className="font-bold text-base text-gray-900">Hóa Đơn Zalo</h3><button onClick={() => setReceiptRoom(null)} className="p-2 bg-gray-100 rounded-full"><Icon name="x" className="w-4 h-4" /></button></div>
-                                <div className="p-4 flex-1 min-h-0 bg-gray-50 overflow-y-auto flex flex-col items-center">{isGenerating ? (<div className="flex flex-col items-center justify-center h-full text-gray-400 py-10"><Icon name="loader" className="w-6 h-6 animate-spin mb-2" /><p className="text-sm">Đang tạo...</p></div>) : ( receiptImgUrl && <img src={receiptImgUrl} className="w-full h-auto shadow-sm rounded-lg block border border-gray-200" alt="Hóa đơn" /> )}</div>
-                                <div className="p-4 bg-white space-y-2.5 flex-shrink-0 border-t border-gray-100"><button onClick={handleZaloAction} disabled={isGenerating} className="w-full py-3.5 bg-blue-600 text-white font-semibold text-base rounded-xl flex items-center justify-center gap-2 shadow-sm">Mở Khung Chat Zalo</button></div>
+                                <div className="flex justify-between items-center p-4 border-b border-gray-100 bg-white flex-shrink-0">
+                                    <h3 className="font-bold text-base text-gray-900">Gửi Hóa Đơn Zalo</h3>
+                                    <button onClick={() => setReceiptRoom(null)} className="p-2 bg-gray-100 rounded-full"><Icon name="x" className="w-4 h-4" /></button>
+                                </div>
+                                <div className="p-4 flex-1 min-h-0 bg-gray-50 overflow-y-auto flex flex-col items-center relative">
+                                    {isGenerating ? (
+                                        <div className="flex flex-col items-center justify-center h-full text-gray-400 py-10"><Icon name="loader" className="w-6 h-6 animate-spin mb-2" /><p className="text-sm">Đang tạo...</p></div>
+                                    ) : ( receiptImgUrl && <img src={receiptImgUrl} className="w-full h-auto shadow-sm rounded-lg block border border-gray-200" alt="Hóa đơn" /> )}
+                                </div>
+                                <div className="p-4 bg-white flex flex-col gap-2.5 flex-shrink-0 border-t border-gray-100">
+                                    {copyState === 'idle' ? (
+                                        <button onClick={handleCopyAction} disabled={isGenerating} className="w-full py-3.5 bg-blue-500 text-white font-semibold text-sm rounded-xl shadow-sm flex justify-center items-center gap-2">
+                                            <Icon name="copy" className="w-4 h-4" /> 1. Copy Ảnh Hóa Đơn
+                                        </button>
+                                    ) : (
+                                        <button onClick={handleOpenZaloAction} className="w-full py-3.5 bg-green-600 text-white font-semibold text-sm rounded-xl shadow-sm flex justify-center items-center gap-2 fade-in">
+                                            <Icon name="send" className="w-4 h-4" /> 2. Mở Zalo (Vào chat ấn Dán)
+                                        </button>
+                                    )}
+                                    <button onClick={handleShareNative} disabled={isGenerating} className="w-full py-2.5 bg-gray-50 text-gray-600 font-medium text-xs rounded-xl border border-gray-200 flex justify-center items-center gap-2">
+                                        <Icon name="share" className="w-3.5 h-3.5" /> Hoặc: Gửi bằng Native Share
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     )}
@@ -261,7 +355,10 @@
                     {receiptRoom && (
                         <div className="fixed top-[-9999px] left-[-9999px]">
                             <div ref={receiptRef} className="w-[400px] bg-white p-6 border border-gray-200" style={{ fontFamily: "'Inter', sans-serif" }}>
-                                <div className="text-center mb-5 border-b border-dashed border-gray-200 pb-4"><h1 className="text-2xl font-bold text-gray-900">HÓA ĐƠN TIỀN NHÀ</h1><p className="text-gray-500 text-sm mt-0.5">Tháng {currentMonth}/{currentYear}</p></div>
+                                <div className="text-center mb-5 border-b border-dashed border-gray-200 pb-4">
+                                    <h1 className="text-2xl font-bold text-gray-900">HÓA ĐƠN TIỀN NHÀ</h1>
+                                    <p className="text-gray-500 text-sm mt-0.5">Tháng {currentMonth}/{currentYear}</p>
+                                </div>
                                 <div className="mb-5 bg-gray-50 p-3.5 rounded-xl border border-gray-200 text-sm">
                                     <div className="flex justify-between mb-1.5"><span className="text-gray-500 font-medium">Phòng:</span><span className="font-bold text-gray-900">{receiptRoom.name}</span></div>
                                     <div className="flex justify-between"><span className="text-gray-500 font-medium">Khách thuê:</span><span className="font-bold text-gray-900">{receiptRoom.tenant || 'Khách'}</span></div>
@@ -269,9 +366,11 @@
                                 <div className="space-y-3 mb-5 text-sm">
                                     {(() => {
                                         const r = receiptRoom;
-                                        const newElec = r.currentElec !== null ? r.currentElec : r.lastElec; const newWater = r.currentWater !== null ? r.currentWater : r.lastWater;
+                                        const newElec = r.currentElec !== null ? r.currentElec : r.lastElec; 
+                                        const newWater = r.currentWater !== null ? r.currentWater : r.lastWater;
                                         const uE = Math.max(0, newElec - r.lastElec); const uW = Math.max(0, newWater - r.lastWater);
-                                        const tD = uE * currentRates.elec; const tN = uW * currentRates.water; const carriedDebt = Number(r.debt || 0);
+                                        const tD = uE * currentRates.elec; const tN = uW * currentRates.water;
+                                        const carriedDebt = Number(r.debt || 0);
                                         return (
                                             <>
                                                 <div className="flex justify-between items-center"><span className="text-gray-600">1. Tiền phòng</span><span className="font-semibold text-gray-900">{Number(r.price).toLocaleString('vi-VN')}đ</span></div>
@@ -279,13 +378,19 @@
                                                 <div className="border-t border-gray-100 pt-2.5"><div className="flex justify-between items-center mb-0.5"><span className="text-gray-600">3. Tiền nước</span><span className="font-semibold text-gray-900">{tN.toLocaleString('vi-VN')}đ</span></div><div className="text-xs text-gray-400">({uW} khối x {currentRates.water}đ)</div></div>
                                                 <div className="border-t border-gray-100 pt-2.5 flex justify-between items-center"><span className="text-gray-600">4. Phí Dịch vụ</span><span className="font-semibold text-gray-900">{currentRates.service.toLocaleString('vi-VN')}đ</span></div>
                                                 {carriedDebt !== 0 && (
-                                                    <div className="border-t border-gray-100 pt-2.5 flex justify-between items-center text-gray-800"><span className="font-medium">{carriedDebt > 0 ? '5. Nợ cũ kỳ trước' : '5. Dư cũ kỳ trước'}</span><span className="font-bold">{carriedDebt > 0 ? Number(carriedDebt).toLocaleString('vi-VN') + 'đ' : '- ' + Math.abs(carriedDebt).toLocaleString('vi-VN') + 'đ'}</span></div>
+                                                    <div className="border-t border-gray-100 pt-2.5 flex justify-between items-center text-gray-800">
+                                                        <span className="font-medium">{carriedDebt > 0 ? '5. Nợ cũ kỳ trước' : '5. Dư cũ kỳ trước'}</span>
+                                                        <span className="font-bold">{carriedDebt > 0 ? Number(carriedDebt).toLocaleString('vi-VN') + 'đ' : '- ' + Math.abs(carriedDebt).toLocaleString('vi-VN') + 'đ'}</span>
+                                                    </div>
                                                 )}
                                             </>
                                         );
                                     })()}
                                 </div>
-                                <div className="mt-5 bg-gray-900 text-white p-4 rounded-xl flex justify-between items-center"><span className="text-xs font-semibold text-gray-400 uppercase">Tổng cần thu</span><span className="text-xl font-bold text-white">{calculateBaseTotal(receiptRoom, currentRates).toLocaleString('vi-VN')} đ</span></div>
+                                <div className="mt-5 bg-gray-900 text-white p-4 rounded-xl flex justify-between items-center">
+                                    <span className="text-xs font-semibold text-gray-400 uppercase">Tổng cần thu</span>
+                                    <span className="text-xl font-bold text-white">{calculateBaseTotal(receiptRoom, currentRates).toLocaleString('vi-VN')} đ</span>
+                                </div>
                             </div>
                         </div>
                     )}
@@ -407,12 +512,11 @@
             const [activeTab, setActiveTab] = useState('ghi_so');
             const [selectedBuilding, setSelectedBuilding] = useState(data.buildings[0]?.id || '');
             const [showConfirmNewMonth, setShowConfirmNewMonth] = useState(false);
-            const [syncStatus, setSyncStatus] = useState({ text: 'Sẵn sàng', color: 'text-green-400' });
+            const [syncStatus, setSyncStatus] = useState({ text: 'Đang kết nối...', color: 'text-blue-400' });
             
             const syncTimeout = useRef(null);
-            const skipFetchRef = useRef(false); // CỜ BÁO: CHỐNG GHI ĐÈ KHI CHUYỂN THÁNG
+            const skipFetchRef = useRef(false);
 
-            // HÀM ĐẨY LÊN SHEET
             const syncToSheets = useCallback(async (currentData, month = currentMonth, year = currentYear) => {
                 if (!SCRIPT_URL) return;
                 setSyncStatus({ text: 'Đang lưu...', color: 'text-yellow-400' });
@@ -428,7 +532,6 @@
                 }, 800); 
             }, [currentMonth, currentYear]);
 
-            // HÀM TẢI TỪ SHEET VỀ
             const fetchDataFromSheet = async (month, year) => {
                 if (!SCRIPT_URL) return;
                 setSyncStatus({ text: 'Đang tải...', color: 'text-blue-400' });
@@ -483,13 +586,11 @@
             };
 
             useEffect(() => {
-                // Nếu vừa được lệnh "Gộp ngầm", thì bỏ qua việc fetch (để bảo toàn dữ liệu vừa gộp)
                 if (skipFetchRef.current) {
                     skipFetchRef.current = false;
                 } else {
                     fetchDataFromSheet(currentMonth, currentYear);
                 }
-                
                 const handleVisibilityChange = () => { if (document.visibilityState === 'visible') fetchDataFromSheet(currentMonth, currentYear); };
                 document.addEventListener('visibilitychange', handleVisibilityChange);
                 return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
@@ -499,19 +600,12 @@
 
             const handlePrevMonth = () => { if (currentMonth === 1) { setCurrentMonth(12); setCurrentYear(currentYear - 1); } else { setCurrentMonth(currentMonth - 1); } };
             
-            // HÀM CHUYỂN THÁNG (CỰC KỲ THÔNG MINH)
             const handleNextMonth = () => { 
                 let nextMonth = currentMonth + 1; let nextYear = currentYear;
                 if (nextMonth > 12) { nextMonth = 1; nextYear += 1; }
-                
                 const nextDataStorage = loadStorageData(nextMonth, nextYear);
-                if (!nextDataStorage) {
-                    // Nếu tháng sau chưa từng có trên máy -> Mới hỏi xác nhận chốt sổ
-                    setShowConfirmNewMonth(true);
-                } else {
-                    // Nếu ĐÃ CÓ dữ liệu tháng sau -> TỰ ĐỘNG GỘP SỔ & BẢO TOÀN DỮ LIỆU ĐÃ GÕ
-                    executeMonthTransition(nextMonth, nextYear, nextDataStorage);
-                }
+                if (!nextDataStorage) { setShowConfirmNewMonth(true); } 
+                else { executeMonthTransition(nextMonth, nextYear, nextDataStorage); }
             };
 
             const confirmNextMonth = () => {
@@ -521,48 +615,34 @@
                 setShowConfirmNewMonth(false);
             };
 
-            // LÕI THUẬT TOÁN BẢO TOÀN DỮ LIỆU
             const executeMonthTransition = (nextMonth, nextYear, existingNextData) => {
                 const newData = { 
                     ...data, 
                     rooms: data.rooms.map(r => {
-                        // Tính nợ cũ dựa vào chỉnh sửa mới nhất của tháng hiện tại
                         let currentCarried = Number(r.debt || 0);
                         if (r.paymentStatus === 'debt' && r.subDebt > 0) currentCarried += Number(r.subDebt);
                         if (r.paymentStatus === 'excess' && r.subDebt > 0) currentCarried -= Number(r.subDebt);
-                        
-                        // Lấy lại những gì đã gõ ở tháng sau (nếu có)
                         let existingRoom = existingNextData ? existingNextData.rooms.find(ex => ex.id === r.id) : null;
 
                         return { 
                             ...r, 
                             lastElec: r.currentElec !== null ? r.currentElec : r.lastElec, 
                             lastWater: r.currentWater !== null ? r.currentWater : r.lastWater, 
-                            // GIỮ NGUYÊN SỐ ĐIỆN NƯỚC ĐÃ GÕ Ở THÁNG SAU
                             currentElec: existingRoom ? existingRoom.currentElec : null, 
                             currentWater: existingRoom ? existingRoom.currentWater : null, 
                             paymentStatus: existingRoom ? existingRoom.paymentStatus : 'none', 
                             subDebt: existingRoom ? existingRoom.subDebt : 0, 
-                            // CHÈN SỐ NỢ MỚI VÀO
                             debt: currentCarried 
                         };
                     }) 
                 };
+                skipFetchRef.current = true;
+                setCurrentMonth(nextMonth); setCurrentYear(nextYear); setData(newData); saveStorageData(nextMonth, nextYear, newData); 
                 
-                skipFetchRef.current = true; // Bật cờ chặn Fetch để bảo toàn dữ liệu vừa gộp
-                setCurrentMonth(nextMonth); 
-                setCurrentYear(nextYear); 
-                setData(newData); 
-                saveStorageData(nextMonth, nextYear, newData); 
-                
-                // Đẩy lên Google Sheets ngay lập tức (Xuyên qua debounce)
                 setSyncStatus({ text: 'Đang gộp sổ...', color: 'text-yellow-400' });
                 const payload = { ...newData, month: String(nextMonth).padStart(2, '0'), year: String(nextYear) };
                 fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
-                    .then(() => {
-                        setSyncStatus({ text: 'Đã gộp T.' + nextMonth, color: 'text-green-400' });
-                        setTimeout(() => setSyncStatus({ text: '', color: '' }), 2500);
-                    })
+                    .then(() => { setSyncStatus({ text: 'Đã gộp T.' + nextMonth, color: 'text-green-400' }); setTimeout(() => setSyncStatus({ text: '', color: '' }), 2500); })
                     .catch(() => setSyncStatus({ text: 'Lỗi mạng', color: 'text-red-400' }));
             };
 
