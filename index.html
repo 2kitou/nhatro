@@ -179,7 +179,7 @@
                 } catch (err) { setIsGenerating(false); }
             };
 
-            // BƯỚC 1: COPY ẢNH VÀO CLIPBOARD (Kỹ thuật vượt tường lửa iOS WebKit)
+            // BƯỚC 1: COPY ẢNH VÀO CLIPBOARD
             const handleCopyAction = async () => {
                 try {
                     const makeImagePromise = async () => {
@@ -187,7 +187,7 @@
                         return await response.blob();
                     };
                     
-                    // Safari iOS yêu cầu phải gọi new ClipboardItem với Promise để không bị timeout chặn
+                    // Promise Wrap cho phép Safari vượt rào bảo mật Timeout
                     await navigator.clipboard.write([
                         new window.ClipboardItem({
                             'image/png': makeImagePromise()
@@ -198,20 +198,10 @@
                     setCopyState('copied');
                 } catch (err) {
                     console.log('Trình duyệt chặn Copy:', err);
-                    setToastMsg('Vui lòng CHẠM GIỮ ẢNH để Copy!');
+                    setToastMsg('Máy chặn Copy. Vui lòng CHẠM GIỮ ẢNH để Copy!');
                     setCopyState('copied'); 
                 }
                 setTimeout(() => setToastMsg(''), 3000);
-            };
-
-            // BƯỚC 2: MỞ ZALO SẠCH SẼ CHUẨN XÁC
-            const handleOpenZaloAction = () => {
-                // Loại bỏ tất cả khoảng trắng hoặc ký tự lạ trong SĐT
-                let sdt = receiptRoom.phone.replace(/[^0-9]/g, ''); 
-                if (sdt.startsWith('0')) sdt = '84' + sdt.slice(1);
-                
-                // Dùng location.href thay vì window.open để mở trực tiếp App Zalo, tránh bị trình duyệt chặn Popup
-                window.location.href = `https://zalo.me/${sdt}`;
             };
 
             const handleShareNative = async () => {
@@ -242,6 +232,9 @@
             };
 
             if (!selectedBuilding) return <div className="p-8 text-center text-gray-400 mt-10">Chưa có khu vực.</div>;
+
+            // Xử lý SĐT thành Link chuẩn của Zalo (loại bỏ hoàn toàn các ký tự lạ, giữ nguyên đầu số 0)
+            const zaloPhoneNumber = receiptRoom ? receiptRoom.phone.replace(/[^0-9]/g, '') : '';
 
             return (
                 <div className="flex flex-col h-full bg-white fade-in">
@@ -347,10 +340,14 @@
                                             <Icon name="copy" className="w-4 h-4" /> 1. Copy Ảnh Hóa Đơn
                                         </button>
                                     ) : (
-                                        <button onClick={handleOpenZaloAction} className="w-full py-3.5 bg-green-600 text-white font-semibold text-sm rounded-xl shadow-sm flex justify-center items-center gap-2 fade-in">
+                                        // ĐÃ SỬA: Biến nút Mở Zalo thành Thẻ LINK <a> chuẩn xác
+                                        <a href={`https://zalo.me/${zaloPhoneNumber}`} target="_blank" rel="noopener noreferrer" className="w-full py-3.5 bg-green-600 text-white font-semibold text-sm rounded-xl shadow-sm flex justify-center items-center gap-2 fade-in">
                                             <Icon name="send" className="w-4 h-4" /> 2. Mở Zalo (Vào chat ấn Dán)
-                                        </button>
+                                        </a>
                                     )}
+                                    <button onClick={handleShareNative} disabled={isGenerating} className="w-full py-2.5 bg-gray-50 text-gray-600 font-medium text-xs rounded-xl border border-gray-200 flex justify-center items-center gap-2">
+                                        <Icon name="share" className="w-3.5 h-3.5" /> Hoặc: Gửi bằng Native Share
+                                    </button>
                                 </div>
                             </div>
                         </div>
