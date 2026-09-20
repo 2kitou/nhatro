@@ -29,7 +29,7 @@
     <script type="text/babel">
         const { useState, useEffect, useRef, useCallback } = React;
         
-        // ⚠️ DÁN LINK WEB APP CỦA GOOGLE APPS SCRIPT VÀO ĐÂY
+        // ĐÃ GẮN SẴN LINK THẬT CỦA BẠN - KHÔNG CẦN SỬA GÌ NỮA!
         const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyijDGpAV6NTCCKXpDKqAvd7TIbQF2SIdx0z_J40G4NWNTnvhmfQJwvYOlDxEmNWc-IXA/exec'; 
 
         const loadStorageData = (m, y) => {
@@ -87,7 +87,7 @@
                 const newData = { ...data, rooms: data.rooms.map(r => r.id === roomId ? { ...r, [field]: value === '' ? null : Number(value) } : r) };
                 setData(newData);
                 saveStorageData(currentMonth, currentYear, newData);
-                syncToSheets(newData); // Kích hoạt đồng bộ ngay khi gõ
+                syncToSheets(newData); 
             };
 
             const handleNext = () => {
@@ -508,13 +508,13 @@
             const [activeTab, setActiveTab] = useState('ghi_so');
             const [selectedBuilding, setSelectedBuilding] = useState(data.buildings[0]?.id || '');
             const [showConfirmNewMonth, setShowConfirmNewMonth] = useState(false);
-            const [syncStatus, setSyncStatus] = useState({ text: 'Sẵn sàng', color: 'text-green-400' });
+            const [syncStatus, setSyncStatus] = useState({ text: 'Đang kết nối...', color: 'text-blue-400' });
             
             const syncTimeout = useRef(null);
 
             // Hàm GỬI TỰ ĐỘNG
             const syncToSheets = useCallback(async (currentData, month = currentMonth, year = currentYear) => {
-                if (!SCRIPT_URL || SCRIPT_URL.includes("...")) return;
+                if (!SCRIPT_URL) return;
                 setSyncStatus({ text: 'Đang lưu...', color: 'text-yellow-400' });
                 const payload = { ...currentData, month: String(month).padStart(2, '0'), year: String(year) };
                 
@@ -525,12 +525,12 @@
                         setSyncStatus({ text: 'Đã lưu', color: 'text-green-400' });
                         setTimeout(() => setSyncStatus({ text: '', color: '' }), 2500);
                     } catch (e) { setSyncStatus({ text: 'Lỗi mạng', color: 'text-red-400' }); }
-                }, 800); // Ngừng gõ 0.8 giây là gửi luôn
+                }, 800); 
             }, [currentMonth, currentYear]);
 
             // KẾ TOÁN NỘI SUY (ĐỌC TỪ SHEET VỀ)
             const fetchDataFromSheet = async (month, year) => {
-                if (!SCRIPT_URL || SCRIPT_URL.includes("...")) return;
+                if (!SCRIPT_URL) return;
                 setSyncStatus({ text: 'Đang tải...', color: 'text-blue-400' });
                 try {
                     const res = await fetch(`${SCRIPT_URL}?month=${month}&year=${year}&t=${Date.now()}`);
