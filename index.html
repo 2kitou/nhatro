@@ -6,13 +6,15 @@
     <title>Quản Lý Nhà Trọ</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <!-- THÊM THƯ VIỆN NÉN ZIP -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap');
         body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; color: #111827; }
         .mobile-container { max-width: 480px; margin: 0 auto; background-color: #ffffff; height: 100vh; height: 100dvh; display: flex; flex-direction: column; box-shadow: 0 0 20px rgba(0,0,0,0.05); overflow: hidden; }
         .hide-scrollbar::-webkit-scrollbar { display: none; }
@@ -29,7 +31,6 @@
     <script type="text/babel">
         const { useState, useEffect, useRef, useCallback } = React;
         
-        // ĐÃ GẮN SẴN LINK THẬT CỦA BẠN
         const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyijDGpAV6NTCCKXpDKqAvd7TIbQF2SIdx0z_J40G4NWNTnvhmfQJwvYOlDxEmNWc-IXA/exec'; 
 
         const loadStorageData = (m, y) => {
@@ -63,6 +64,56 @@
             const usedWater = Math.max(0, (room.currentWater !== null ? room.currentWater : room.lastWater) - room.lastWater);
             const carriedDebt = Number(room.debt || 0); 
             return Number(room.price) + (usedElec * rates.elec) + (usedWater * rates.water) + Number(rates.service) + carriedDebt;
+        };
+
+        // GIAO DIỆN HÓA ĐƠN CHUẨN MỚI (Tái sử dụng cho cả ZIP và Tải lẻ)
+        const ReceiptTemplate = ({ room, month, year, rates }) => {
+            if(!room || !rates) return null;
+            const newElec = room.currentElec !== null ? room.currentElec : room.lastElec; 
+            const newWater = room.currentWater !== null ? room.currentWater : room.lastWater;
+            const uE = Math.max(0, newElec - room.lastElec); const uW = Math.max(0, newWater - room.lastWater);
+            const tD = uE * rates.elec; const tN = uW * rates.water;
+            const carriedDebt = Number(room.debt || 0);
+            const total = calculateBaseTotal(room, rates);
+
+            return (
+                <div className="w-[420px] bg-white p-7 relative overflow-hidden" style={{ fontFamily: "'Inter', sans-serif" }}>
+                    {/* DẤU MỘC TÊN PHÒNG KHỔNG LỒ GIÚP DỄ NHÌN TRONG THUMBNAIL */}
+                    <div className="absolute top-0 right-0 bg-blue-600 text-white px-5 py-3 rounded-bl-[2rem] shadow-md border-b-[3px] border-l-[3px] border-blue-800 z-10 flex flex-col items-center justify-center">
+                        <span className="text-[10px] uppercase font-bold tracking-widest opacity-80 mb-[-2px]">PHÒNG</span>
+                        <span className="text-4xl font-black leading-none">{room.name}</span>
+                    </div>
+                    
+                    <div className="text-left mb-6 border-b-2 border-dashed border-gray-200 pb-5 pt-2">
+                        <h1 className="text-[28px] font-black text-gray-900 tracking-tight">HÓA ĐƠN</h1>
+                        <p className="text-gray-500 text-base mt-1 font-medium">Tháng {month}/{year}</p>
+                    </div>
+                    
+                    <div className="mb-6 bg-gray-50 p-4 rounded-xl border border-gray-200 text-base shadow-sm">
+                        <div className="flex justify-between mb-2"><span className="text-gray-500 font-medium">Khách thuê:</span><span className="font-bold text-gray-900 text-lg truncate max-w-[200px] text-right">{room.tenant || 'Khách'}</span></div>
+                        <div className="flex justify-between"><span className="text-gray-500 font-medium">Số điện thoại:</span><span className="font-bold text-gray-900">{room.phone || '---'}</span></div>
+                    </div>
+                    
+                    <div className="space-y-4 mb-8 text-base">
+                        <div className="flex justify-between items-center"><span className="text-gray-600 font-medium">1. Tiền phòng</span><span className="font-bold text-gray-900 text-[17px]">{Number(room.price).toLocaleString('vi-VN')}đ</span></div>
+                        <div className="border-t border-gray-100 pt-3"><div className="flex justify-between items-center mb-0.5"><span className="text-gray-600 font-medium">2. Tiền điện</span><span className="font-bold text-gray-900 text-[17px]">{tD.toLocaleString('vi-VN')}đ</span></div><div className="text-sm text-gray-400">({uE} ký x {rates.elec}đ)</div></div>
+                        <div className="border-t border-gray-100 pt-3"><div className="flex justify-between items-center mb-0.5"><span className="text-gray-600 font-medium">3. Tiền nước</span><span className="font-bold text-gray-900 text-[17px]">{tN.toLocaleString('vi-VN')}đ</span></div><div className="text-sm text-gray-400">({uW} khối x {rates.water}đ)</div></div>
+                        <div className="border-t border-gray-100 pt-3 flex justify-between items-center"><span className="text-gray-600 font-medium">4. Phí Dịch vụ</span><span className="font-bold text-gray-900 text-[17px]">{rates.service.toLocaleString('vi-VN')}đ</span></div>
+                        {carriedDebt !== 0 && (
+                            <div className="border-t border-gray-100 pt-3 flex justify-between items-center text-gray-800">
+                                <span className="font-bold">{carriedDebt > 0 ? '5. Nợ cũ kỳ trước' : '5. Dư cũ kỳ trước'}</span>
+                                <span className={`font-black text-[17px] ${carriedDebt > 0 ? 'text-red-600' : 'text-green-600'}`}>{carriedDebt > 0 ? Number(carriedDebt).toLocaleString('vi-VN') + 'đ' : '- ' + Math.abs(carriedDebt).toLocaleString('vi-VN') + 'đ'}</span>
+                            </div>
+                        )}
+                    </div>
+                    
+                    <div className="mt-2 bg-gray-900 text-white p-5 rounded-2xl flex justify-between items-center shadow-lg border border-gray-800 relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-white opacity-5 rounded-full -mr-10 -mt-10"></div>
+                        <span className="text-sm font-bold text-gray-300 uppercase tracking-widest z-10">Tổng cần thu</span>
+                        <span className="text-2xl font-black text-white z-10">{total.toLocaleString('vi-VN')} đ</span>
+                    </div>
+                </div>
+            );
         };
 
         const TabGhiSo = ({ data, setData, selectedBuilding, setSelectedBuilding, currentMonth, currentYear, syncToSheets }) => {
@@ -146,7 +197,8 @@
             const [receiptRoom, setReceiptRoom] = useState(null);
             const [receiptImgUrl, setReceiptImgUrl] = useState('');
             const [isGenerating, setIsGenerating] = useState(false);
-            const [copyState, setCopyState] = useState('idle'); 
+            const [isGeneratingZip, setIsGeneratingZip] = useState(false);
+            
             const receiptRef = useRef(null);
 
             const currentBuilding = data.buildings.find(b => b.id === selectedBuilding);
@@ -164,9 +216,9 @@
                 return sum;
             }, 0);
 
+            // XỬ LÝ MỞ HÓA ĐƠN LẺ
             const handleCreateReceipt = (room) => {
-                if(!room.phone) { setToastMsg(`Phòng ${room.name} chưa nhập SĐT!`); setTimeout(() => setToastMsg(''), 2500); return; }
-                setReceiptRoom(room); setReceiptImgUrl(''); setIsGenerating(true); setCopyState('idle');
+                setReceiptRoom(room); setReceiptImgUrl(''); setIsGenerating(true);
                 setTimeout(() => generateImage(), 400);
             };
 
@@ -179,43 +231,54 @@
                 } catch (err) { setIsGenerating(false); }
             };
 
-            // BƯỚC 1: COPY ẢNH VÀO CLIPBOARD
-            const handleCopyAction = async () => {
-                try {
-                    const makeImagePromise = async () => {
-                        const response = await fetch(receiptImgUrl);
-                        return await response.blob();
-                    };
-                    
-                    // Promise Wrap cho phép Safari vượt rào bảo mật Timeout
-                    await navigator.clipboard.write([
-                        new window.ClipboardItem({
-                            'image/png': makeImagePromise()
-                        })
-                    ]);
-                    
-                    setToastMsg('Đã copy Hóa đơn! Hãy bấm Mở Zalo.');
-                    setCopyState('copied');
-                } catch (err) {
-                    console.log('Trình duyệt chặn Copy:', err);
-                    setToastMsg('Máy chặn Copy. Vui lòng CHẠM GIỮ ẢNH để Copy!');
-                    setCopyState('copied'); 
-                }
-                setTimeout(() => setToastMsg(''), 3000);
+            // TẢI 1 ẢNH TRỰC TIẾP VỀ MÁY
+            const handleDownloadSingle = () => {
+                const link = document.createElement('a');
+                link.href = receiptImgUrl;
+                link.download = `HoaDon_P${receiptRoom.name}_Thang${currentMonth}.png`;
+                link.click();
+                setToastMsg('Đã tải ảnh về máy!');
+                setTimeout(() => setToastMsg(''), 2500);
             };
 
-            const handleShareNative = async () => {
+            // TẢI HÀNG LOẠT (FILE ZIP)
+            const handleBatchZip = async () => {
+                const readyRooms = filteredRooms.filter(r => r.currentElec !== null && r.currentWater !== null);
+                if(readyRooms.length === 0) {
+                    setToastMsg("Chưa có phòng nào được chốt số điện nước!");
+                    setTimeout(() => setToastMsg(''), 2500);
+                    return;
+                }
+
+                setIsGeneratingZip(true);
                 try {
-                    const response = await fetch(receiptImgUrl);
-                    const blob = await response.blob();
-                    const file = new File([blob], `HoaDon_P${receiptRoom.name}.png`, { type: 'image/png' });
-                    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                        await navigator.share({ files: [file], title: `Hóa Đơn P.${receiptRoom.name}` });
-                    } else {
-                        setToastMsg('Trình duyệt không hỗ trợ!');
-                        setTimeout(() => setToastMsg(''), 2500);
+                    const JSZip = window.JSZip;
+                    const zip = new JSZip();
+                    
+                    // Lặp qua từng phòng để vẽ và nhét vào ZIP
+                    for (let r of readyRooms) {
+                        const el = document.getElementById(`receipt-batch-${r.id}`);
+                        if (el) {
+                            const canvas = await html2canvas(el, { scale: 2, backgroundColor: '#ffffff' });
+                            const dataURI = canvas.toDataURL('image/png');
+                            const data = dataURI.split(',')[1];
+                            zip.file(`HoaDon_P${r.name}_Thang${currentMonth}.png`, data, {base64: true});
+                        }
                     }
-                } catch (err) {}
+                    
+                    const content = await zip.generateAsync({type: "blob"});
+                    const link = document.createElement('a');
+                    link.href = URL.createObjectURL(content);
+                    link.download = `TatCa_HoaDon_Thang_${currentMonth}_${currentYear}.zip`;
+                    link.click();
+                    
+                    setToastMsg('Đã tải thành công File ZIP!');
+                } catch(e) {
+                    console.error(e);
+                    setToastMsg("Lỗi tạo file ZIP!");
+                }
+                setTimeout(() => setToastMsg(''), 3000);
+                setIsGeneratingZip(false);
             };
 
             const handleStatusChange = (roomId, status) => {
@@ -233,12 +296,9 @@
 
             if (!selectedBuilding) return <div className="p-8 text-center text-gray-400 mt-10">Chưa có khu vực.</div>;
 
-            // Xử lý SĐT thành Link chuẩn của Zalo (loại bỏ hoàn toàn các ký tự lạ, giữ nguyên đầu số 0)
-            const zaloPhoneNumber = receiptRoom ? receiptRoom.phone.replace(/[^0-9]/g, '') : '';
-
             return (
                 <div className="flex flex-col h-full bg-white fade-in">
-                    {toastMsg && <div className="fixed top-16 left-1/2 transform -translate-x-1/2 w-11/12 max-w-sm bg-gray-900 text-white px-5 py-3 rounded-xl shadow-lg z-[100] text-sm font-medium text-center">{toastMsg}</div>}
+                    {toastMsg && <div className="fixed top-16 left-1/2 transform -translate-x-1/2 w-11/12 max-w-sm bg-gray-900 text-white px-5 py-3 rounded-xl shadow-lg z-[100] text-sm font-medium text-center fade-in">{toastMsg}</div>}
 
                     <div className="bg-white p-4 border-b border-gray-100 flex-shrink-0">
                         <select className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3.5 text-lg font-semibold text-gray-800 outline-none" value={selectedBuilding} onChange={e => setSelectedBuilding(e.target.value)}>
@@ -254,6 +314,14 @@
                                 <span className="text-gray-300 font-light mx-2">/</span> 
                                 <span className="text-gray-400 font-medium">{totalRevenue.toLocaleString('vi-VN')}đ</span>
                             </div>
+                        </div>
+
+                        {/* NÚT TẢI HÀNG LOẠT (FILE ZIP) */}
+                        <div className="mb-4">
+                            <button onClick={handleBatchZip} disabled={isGeneratingZip} className="w-full py-3.5 bg-blue-600 text-white font-bold rounded-xl text-sm flex items-center justify-center gap-2 shadow-sm transition-all hover:bg-blue-700">
+                                {isGeneratingZip ? <Icon name="loader" className="w-5 h-5 animate-spin" /> : <Icon name="archive" className="w-5 h-5" />}
+                                {isGeneratingZip ? 'Đang nén File ZIP...' : 'Tải File ZIP (Tất Cả Hóa Đơn)'}
+                            </button>
                         </div>
                         
                         <div className="space-y-3">
@@ -276,45 +344,21 @@
                                         </div>
 
                                         <div className="grid grid-cols-3 gap-2 mb-3">
-                                            <button onClick={() => handleStatusChange(room.id, 'paid')} className={`py-2.5 rounded-xl font-semibold text-xs border transition-all ${status === 'paid' ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-700 border-gray-200'}`}>
-                                                ĐỦ TIỀN
-                                            </button>
-                                            <button onClick={() => handleStatusChange(room.id, 'debt')} className={`py-2.5 rounded-xl font-semibold text-xs border transition-all ${status === 'debt' ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-700 border-gray-200'}`}>
-                                                CÒN NỢ
-                                            </button>
-                                            <button onClick={() => handleStatusChange(room.id, 'excess')} className={`py-2.5 rounded-xl font-semibold text-xs border transition-all ${status === 'excess' ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-700 border-gray-200'}`}>
-                                                ĐÓNG DƯ
-                                            </button>
+                                            <button onClick={() => handleStatusChange(room.id, 'paid')} className={`py-2.5 rounded-xl font-semibold text-xs border transition-all ${status === 'paid' ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-700 border-gray-200'}`}>ĐỦ TIỀN</button>
+                                            <button onClick={() => handleStatusChange(room.id, 'debt')} className={`py-2.5 rounded-xl font-semibold text-xs border transition-all ${status === 'debt' ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-700 border-gray-200'}`}>CÒN NỢ</button>
+                                            <button onClick={() => handleStatusChange(room.id, 'excess')} className={`py-2.5 rounded-xl font-semibold text-xs border transition-all ${status === 'excess' ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-700 border-gray-200'}`}>ĐÓNG DƯ</button>
                                         </div>
 
                                         {status === 'debt' && (
-                                            <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 mb-3 flex items-center justify-between fade-in">
-                                                <span className="text-xs font-semibold text-gray-600">Trả thiếu (nợ sang tháng sau):</span>
-                                                <div className="relative w-1/2">
-                                                    <input type="number" placeholder="Số tiền..." className="w-full bg-white border border-gray-200 p-2 rounded-lg font-bold text-right text-gray-900 outline-none pr-5 text-sm" 
-                                                        value={room.subDebt !== undefined && room.subDebt !== 0 ? room.subDebt : ''} 
-                                                        onChange={e => handleSubAmountInput(room.id, e.target.value)}
-                                                    />
-                                                    <span className="absolute right-2 top-2 text-gray-400 text-xs">đ</span>
-                                                </div>
-                                            </div>
+                                            <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 mb-3 flex items-center justify-between fade-in"><span className="text-xs font-semibold text-gray-600">Trả thiếu (nợ sang tháng sau):</span><div className="relative w-1/2"><input type="number" placeholder="Số tiền..." className="w-full bg-white border border-gray-200 p-2 rounded-lg font-bold text-right text-gray-900 outline-none pr-5 text-sm" value={room.subDebt !== undefined && room.subDebt !== 0 ? room.subDebt : ''} onChange={e => handleSubAmountInput(room.id, e.target.value)} /><span className="absolute right-2 top-2 text-gray-400 text-xs">đ</span></div></div>
                                         )}
 
                                         {status === 'excess' && (
-                                            <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 mb-3 flex items-center justify-between fade-in">
-                                                <span className="text-xs font-semibold text-gray-600">Đóng dư (trừ tiền tháng sau):</span>
-                                                <div className="relative w-1/2">
-                                                    <input type="number" placeholder="Số tiền..." className="w-full bg-white border border-gray-200 p-2 rounded-lg font-bold text-right text-gray-900 outline-none pr-5 text-sm" 
-                                                        value={room.subDebt !== undefined && room.subDebt !== 0 ? room.subDebt : ''} 
-                                                        onChange={e => handleSubAmountInput(room.id, e.target.value)} 
-                                                    />
-                                                    <span className="absolute right-2 top-2 text-gray-400 text-xs">đ</span>
-                                                </div>
-                                            </div>
+                                            <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 mb-3 flex items-center justify-between fade-in"><span className="text-xs font-semibold text-gray-600">Đóng dư (trừ tiền tháng sau):</span><div className="relative w-1/2"><input type="number" placeholder="Số tiền..." className="w-full bg-white border border-gray-200 p-2 rounded-lg font-bold text-right text-gray-900 outline-none pr-5 text-sm" value={room.subDebt !== undefined && room.subDebt !== 0 ? room.subDebt : ''} onChange={e => handleSubAmountInput(room.id, e.target.value)} /><span className="absolute right-2 top-2 text-gray-400 text-xs">đ</span></div></div>
                                         )}
                                         
                                         <button onClick={() => handleCreateReceipt(room)} disabled={!isReady} className={`w-full py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 ${isReady ? 'bg-gray-100 text-gray-800 border border-gray-200 hover:bg-gray-200' : 'bg-gray-50 text-gray-300 border border-gray-100'}`}>
-                                            <Icon name="image" className="w-4 h-4" /> Tạo Hóa Đơn Zalo
+                                            <Icon name="image" className="w-4 h-4" /> Xem & Tải Hóa Đơn
                                         </button>
                                     </div>
                                 );
@@ -322,79 +366,44 @@
                         </div>
                     </div>
 
+                    {/* HIỂN THỊ 1 HÓA ĐƠN ĐỂ TẢI VỀ */}
                     {receiptRoom && (
-                        <div className="fixed inset-0 bg-black/60 z-[9999] flex flex-col items-center justify-center p-4 fade-in">
-                            <div className="bg-white w-full max-w-[380px] max-h-[85vh] rounded-2xl overflow-hidden shadow-xl flex flex-col">
+                        <div className="fixed inset-0 bg-black/70 z-[9999] flex flex-col items-center justify-center p-4 fade-in backdrop-blur-sm">
+                            <div className="bg-white w-full max-w-[420px] max-h-[90vh] rounded-3xl overflow-hidden shadow-2xl flex flex-col">
                                 <div className="flex justify-between items-center p-4 border-b border-gray-100 bg-white flex-shrink-0">
-                                    <h3 className="font-bold text-base text-gray-900">Gửi Hóa Đơn Zalo</h3>
-                                    <button onClick={() => setReceiptRoom(null)} className="p-2 bg-gray-100 rounded-full"><Icon name="x" className="w-4 h-4" /></button>
+                                    <h3 className="font-bold text-base text-gray-900">Chi tiết Hóa đơn</h3>
+                                    <button onClick={() => setReceiptRoom(null)} className="p-2 bg-gray-100 text-gray-600 rounded-full hover:bg-gray-200"><Icon name="x" className="w-4 h-4" /></button>
                                 </div>
-                                <div className="p-4 flex-1 min-h-0 bg-gray-50 overflow-y-auto flex flex-col items-center relative">
+                                <div className="p-4 flex-1 min-h-0 bg-gray-100 overflow-y-auto flex flex-col items-center justify-center relative">
                                     {isGenerating ? (
-                                        <div className="flex flex-col items-center justify-center h-full text-gray-400 py-10"><Icon name="loader" className="w-6 h-6 animate-spin mb-2" /><p className="text-sm">Đang tạo...</p></div>
-                                    ) : ( receiptImgUrl && <img src={receiptImgUrl} className="w-full h-auto shadow-sm rounded-lg block border border-gray-200" alt="Hóa đơn" /> )}
+                                        <div className="flex flex-col items-center justify-center h-full text-gray-500 py-10"><Icon name="loader" className="w-8 h-8 animate-spin mb-3 text-blue-500" /><p className="text-sm font-medium">Đang tạo ảnh...</p></div>
+                                    ) : ( receiptImgUrl && <img src={receiptImgUrl} className="w-full h-auto shadow-md rounded-2xl block border border-gray-200" alt="Hóa đơn" /> )}
                                 </div>
-                                <div className="p-4 bg-white flex flex-col gap-2.5 flex-shrink-0 border-t border-gray-100">
-                                    {copyState === 'idle' ? (
-                                        <button onClick={handleCopyAction} disabled={isGenerating} className="w-full py-3.5 bg-blue-500 text-white font-semibold text-sm rounded-xl shadow-sm flex justify-center items-center gap-2">
-                                            <Icon name="copy" className="w-4 h-4" /> 1. Copy Ảnh Hóa Đơn
-                                        </button>
-                                    ) : (
-                                        // ĐÃ SỬA: Biến nút Mở Zalo thành Thẻ LINK <a> chuẩn xác
-                                        <a href={`https://zalo.me/${zaloPhoneNumber}`} target="_blank" rel="noopener noreferrer" className="w-full py-3.5 bg-green-600 text-white font-semibold text-sm rounded-xl shadow-sm flex justify-center items-center gap-2 fade-in">
-                                            <Icon name="send" className="w-4 h-4" /> 2. Mở Zalo (Vào chat ấn Dán)
-                                        </a>
-                                    )}
-                                    <button onClick={handleShareNative} disabled={isGenerating} className="w-full py-2.5 bg-gray-50 text-gray-600 font-medium text-xs rounded-xl border border-gray-200 flex justify-center items-center gap-2">
-                                        <Icon name="share" className="w-3.5 h-3.5" /> Hoặc: Gửi bằng Native Share
+                                <div className="p-4 bg-white flex flex-col gap-3 flex-shrink-0 border-t border-gray-100">
+                                    <button onClick={handleDownloadSingle} disabled={isGenerating} className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl shadow-sm flex justify-center items-center gap-2 transition-all">
+                                        <Icon name="download" className="w-5 h-5" /> TẢI ẢNH NÀY VỀ MÁY
+                                    </button>
+                                    <button onClick={() => setReceiptRoom(null)} className="w-full py-2.5 bg-gray-100 text-gray-600 font-bold text-sm rounded-xl flex justify-center items-center hover:bg-gray-200 transition-all">
+                                        Đóng
                                     </button>
                                 </div>
                             </div>
                         </div>
                     )}
 
-                    {receiptRoom && (
-                        <div className="fixed top-[-9999px] left-[-9999px]">
-                            <div ref={receiptRef} className="w-[400px] bg-white p-6 border border-gray-200" style={{ fontFamily: "'Inter', sans-serif" }}>
-                                <div className="text-center mb-5 border-b border-dashed border-gray-200 pb-4">
-                                    <h1 className="text-2xl font-bold text-gray-900">HÓA ĐƠN TIỀN NHÀ</h1>
-                                    <p className="text-gray-500 text-sm mt-0.5">Tháng {currentMonth}/{currentYear}</p>
-                                </div>
-                                <div className="mb-5 bg-gray-50 p-3.5 rounded-xl border border-gray-200 text-sm">
-                                    <div className="flex justify-between mb-1.5"><span className="text-gray-500 font-medium">Phòng:</span><span className="font-bold text-gray-900">{receiptRoom.name}</span></div>
-                                    <div className="flex justify-between"><span className="text-gray-500 font-medium">Khách thuê:</span><span className="font-bold text-gray-900">{receiptRoom.tenant || 'Khách'}</span></div>
-                                </div>
-                                <div className="space-y-3 mb-5 text-sm">
-                                    {(() => {
-                                        const r = receiptRoom;
-                                        const newElec = r.currentElec !== null ? r.currentElec : r.lastElec; 
-                                        const newWater = r.currentWater !== null ? r.currentWater : r.lastWater;
-                                        const uE = Math.max(0, newElec - r.lastElec); const uW = Math.max(0, newWater - r.lastWater);
-                                        const tD = uE * currentRates.elec; const tN = uW * currentRates.water;
-                                        const carriedDebt = Number(r.debt || 0);
-                                        return (
-                                            <>
-                                                <div className="flex justify-between items-center"><span className="text-gray-600">1. Tiền phòng</span><span className="font-semibold text-gray-900">{Number(r.price).toLocaleString('vi-VN')}đ</span></div>
-                                                <div className="border-t border-gray-100 pt-2.5"><div className="flex justify-between items-center mb-0.5"><span className="text-gray-600">2. Tiền điện</span><span className="font-semibold text-gray-900">{tD.toLocaleString('vi-VN')}đ</span></div><div className="text-xs text-gray-400">({uE} ký x {currentRates.elec}đ)</div></div>
-                                                <div className="border-t border-gray-100 pt-2.5"><div className="flex justify-between items-center mb-0.5"><span className="text-gray-600">3. Tiền nước</span><span className="font-semibold text-gray-900">{tN.toLocaleString('vi-VN')}đ</span></div><div className="text-xs text-gray-400">({uW} khối x {currentRates.water}đ)</div></div>
-                                                <div className="border-t border-gray-100 pt-2.5 flex justify-between items-center"><span className="text-gray-600">4. Phí Dịch vụ</span><span className="font-semibold text-gray-900">{currentRates.service.toLocaleString('vi-VN')}đ</span></div>
-                                                {carriedDebt !== 0 && (
-                                                    <div className="border-t border-gray-100 pt-2.5 flex justify-between items-center text-gray-800">
-                                                        <span className="font-medium">{carriedDebt > 0 ? '5. Nợ cũ kỳ trước' : '5. Dư cũ kỳ trước'}</span>
-                                                        <span className="font-bold">{carriedDebt > 0 ? Number(carriedDebt).toLocaleString('vi-VN') + 'đ' : '- ' + Math.abs(carriedDebt).toLocaleString('vi-VN') + 'đ'}</span>
-                                                    </div>
-                                                )}
-                                            </>
-                                        );
-                                    })()}
-                                </div>
-                                <div className="mt-5 bg-gray-900 text-white p-4 rounded-xl flex justify-between items-center">
-                                    <span className="text-xs font-semibold text-gray-400 uppercase">Tổng cần thu</span>
-                                    <span className="text-xl font-bold text-white">{calculateBaseTotal(receiptRoom, currentRates).toLocaleString('vi-VN')} đ</span>
-                                </div>
-                            </div>
+                    {/* VÙNG CHỨA ẨN ĐỂ RENDER BILL (CHO CẢ ZIP VÀ TẢI LẺ) */}
+                    <div className="fixed top-[-9999px] left-[-9999px]">
+                        {/* 1. Dùng cho Hóa đơn đang xem */}
+                        <div ref={receiptRef}>
+                            <ReceiptTemplate room={receiptRoom} month={currentMonth} year={currentYear} rates={currentRates} />
                         </div>
-                    )}
+                        {/* 2. Dùng cho việc nén ZIP toàn bộ */}
+                        {filteredRooms.filter(r => r.currentElec !== null && r.currentWater !== null).map(r => (
+                            <div key={`batch-${r.id}`} id={`receipt-batch-${r.id}`}>
+                                <ReceiptTemplate room={r} month={currentMonth} year={currentYear} rates={currentRates} />
+                            </div>
+                        ))}
+                    </div>
                 </div>
             );
         };
