@@ -44,7 +44,6 @@
             localStorage.setItem(key, JSON.stringify(data));
         };
 
-        // Dữ liệu mẫu (Sẽ tự động bị xóa khi tải được dữ liệu thật từ Sheet)
         const INITIAL_DATA = { buildings: [{ id: 'khu_a', name: 'Khu Trọ Mới', rates: { elec: 3500, water: 14000, service: 50000 } }], rooms: [{ id: 'r_1', buildingId: 'khu_a', name: '101', price: 1500000, debt: 0, lastElec: 0, lastWater: 0, currentElec: null, currentWater: null, paymentStatus: 'none', subDebt: 0 }] };
 
         const Icon = ({ name, className }) => {
@@ -222,16 +221,8 @@
                 } catch (err) { setIsGenerating(false); }
             };
 
-            const handleDownloadSingle = () => {
-                const link = document.createElement('a');
-                link.href = receiptImgUrl;
-                link.download = `HoaDon_P${receiptRoom.name}_Thang${currentMonth}.png`;
-                link.click();
-                setToastMsg('Đã tải ảnh về máy!');
-                setTimeout(() => setToastMsg(''), 2500);
-            };
-
-            const handleBatchZip = async () => {
+            // THUẬT TOÁN MỚI: TẢI TOÀN BỘ VÀO BỘ SƯU TẬP ẢNH
+            const handleBatchShare = async () => {
                 const readyRooms = filteredRooms.filter(r => r.currentElec !== null && r.currentWater !== null);
                 if(readyRooms.length === 0) {
                     setToastMsg("Chưa có phòng nào chốt số!");
@@ -240,25 +231,41 @@
 
                 setIsGeneratingZip(true);
                 try {
-                    const JSZip = window.JSZip; const zip = new JSZip();
-                    
+                    let filesArray = [];
+                    // Vòng lặp vẽ tất cả hình ảnh
                     for (let r of readyRooms) {
                         const el = document.getElementById(`receipt-batch-${r.id}`);
                         if (el) {
                             const canvas = await html2canvas(el, { scale: 2, backgroundColor: '#ffffff' });
-                            const dataURI = canvas.toDataURL('image/png');
-                            const data = dataURI.split(',')[1];
-                            zip.file(`HoaDon_P${r.name}_Thang${currentMonth}.png`, data, {base64: true});
+                            const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+                            const file = new File([blob], `HoaDon_P${r.name}_Thang${currentMonth}.png`, { type: 'image/png' });
+                            filesArray.push(file);
                         }
                     }
-                    const content = await zip.generateAsync({type: "blob"});
-                    const link = document.createElement('a');
-                    link.href = URL.createObjectURL(content);
-                    link.download = `TatCa_HoaDon_Thang_${currentMonth}_${currentYear}.zip`;
-                    link.click();
-                    setToastMsg('Đã tải File ZIP chứa ảnh!');
-                } catch(e) { setToastMsg("Lỗi tạo file ZIP!"); }
-                setTimeout(() => setToastMsg(''), 3000); setIsGeneratingZip(false);
+                    
+                    // KIỂM TRA: NẾU ĐIỆN THOẠI HỖ TRỢ CHIA SẺ NHIỀU FILE VÀO BỘ SƯU TẬP
+                    if (navigator.canShare && navigator.canShare({ files: filesArray })) {
+                        await navigator.share({
+                            files: filesArray,
+                            title: `Hóa Đơn Tháng ${currentMonth}`
+                        });
+                        setToastMsg('Hãy chọn "Lưu hình ảnh" để lưu toàn bộ nhé!');
+                    } else {
+                        // MÁY TÍNH / THIẾT BỊ KHÔNG HỖ TRỢ LƯU ẢNH TRỰC TIẾP -> TẢI FILE ZIP
+                        const JSZip = window.JSZip; const zip = new JSZip();
+                        filesArray.forEach(f => zip.file(f.name, f));
+                        const content = await zip.generateAsync({type: "blob"});
+                        const link = document.createElement('a');
+                        link.href = URL.createObjectURL(content);
+                        link.download = `TatCa_HoaDon_Thang_${currentMonth}_${currentYear}.zip`;
+                        link.click();
+                        setToastMsg('Đã nén toàn bộ thành File ZIP!');
+                    }
+                } catch(e) { 
+                    if (e.name !== 'AbortError') setToastMsg("Lỗi khi tạo ảnh!"); 
+                }
+                setTimeout(() => setToastMsg(''), 3000); 
+                setIsGeneratingZip(false);
             };
 
             const handleStatusChange = (roomId, status) => {
@@ -296,11 +303,11 @@
                             </div>
                         </div>
 
-                        {/* NÚT TẢI HÀNG LOẠT (FILE ZIP) */}
+                        {/* NÚT THÔNG MINH MỚI: TẢI TOÀN BỘ VÀO BỘ SƯU TẬP ẢNH (HOẶC ZIP) */}
                         <div className="mb-4">
-                            <button onClick={handleBatchZip} disabled={isGeneratingZip} className="w-full py-3.5 bg-blue-600 text-white font-bold rounded-xl text-sm flex items-center justify-center gap-2 shadow-sm transition-all hover:bg-blue-700">
-                                {isGeneratingZip ? <Icon name="loader" className="w-5 h-5 animate-spin" /> : <Icon name="archive" className="w-5 h-5" />}
-                                {isGeneratingZip ? 'Đang nén File ZIP...' : 'Tải File ZIP (Tất Cả Hóa Đơn)'}
+                            <button onClick={handleBatchShare} disabled={isGeneratingZip} className="w-full py-4 bg-blue-600 text-white font-bold rounded-2xl text-sm flex items-center justify-center gap-2 shadow-sm transition-all hover:bg-blue-700">
+                                {isGeneratingZip ? <Icon name="loader" className="w-5 h-5 animate-spin" /> : <Icon name="images" className="w-5 h-5" />}
+                                {isGeneratingZip ? 'Đang xuất toàn bộ ảnh...' : 'Lưu Toàn Bộ Vào Thư Viện Ảnh (Hoặc ZIP)'}
                             </button>
                         </div>
                         
@@ -335,7 +342,7 @@
                                         )}
                                         
                                         <button onClick={() => handleCreateReceipt(room)} disabled={!isReady} className={`w-full py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 ${isReady ? 'bg-gray-100 text-gray-800 border border-gray-200 hover:bg-gray-200' : 'bg-gray-50 text-gray-300 border border-gray-100'}`}>
-                                            <Icon name="image" className="w-4 h-4" /> Xem & Tải Hóa Đơn
+                                            <Icon name="image" className="w-4 h-4" /> Xem Hóa Đơn Lẻ
                                         </button>
                                     </div>
                                 );
@@ -343,25 +350,37 @@
                         </div>
                     </div>
 
-                    {/* HIỂN THỊ 1 HÓA ĐƠN ĐỂ TẢI VỀ */}
+                    {/* HIỂN THỊ 1 HÓA ĐƠN KÈM HƯỚNG DẪN "CHẠM GIỮ" */}
                     {receiptRoom && (
-                        <div className="fixed inset-0 bg-black/70 z-[9999] flex flex-col items-center justify-center p-4 fade-in backdrop-blur-sm">
-                            <div className="bg-white w-full max-w-[420px] max-h-[90vh] rounded-3xl overflow-hidden shadow-2xl flex flex-col">
+                        <div className="fixed inset-0 bg-black/80 z-[9999] flex flex-col items-center justify-center p-4 fade-in backdrop-blur-sm">
+                            <div className="bg-white w-full max-w-[420px] max-h-[95vh] rounded-3xl overflow-hidden shadow-2xl flex flex-col">
                                 <div className="flex justify-between items-center p-4 border-b border-gray-100 bg-white flex-shrink-0">
                                     <h3 className="font-bold text-base text-gray-900">Chi tiết Hóa đơn</h3>
                                     <button onClick={() => setReceiptRoom(null)} className="p-2 bg-gray-100 text-gray-600 rounded-full hover:bg-gray-200"><Icon name="x" className="w-4 h-4" /></button>
                                 </div>
-                                <div className="p-4 flex-1 min-h-0 bg-gray-100 overflow-y-auto flex flex-col items-center justify-center relative">
+                                
+                                <div className="p-4 flex-1 min-h-0 bg-gray-100 overflow-y-auto flex flex-col items-center justify-start relative">
                                     {isGenerating ? (
                                         <div className="flex flex-col items-center justify-center h-full text-gray-500 py-10"><Icon name="loader" className="w-8 h-8 animate-spin mb-3 text-blue-500" /><p className="text-sm font-medium">Đang tạo ảnh...</p></div>
-                                    ) : ( receiptImgUrl && <img src={receiptImgUrl} className="w-full h-auto shadow-md rounded-2xl block border border-gray-200" alt="Hóa đơn" /> )}
+                                    ) : ( 
+                                        receiptImgUrl && (
+                                            <div className="w-full flex flex-col items-center">
+                                                <div className="bg-blue-100 border border-blue-200 text-blue-800 text-xs font-semibold px-4 py-2.5 rounded-xl mb-4 w-full text-center flex items-center justify-center gap-2 shadow-sm">
+                                                    <Icon name="smartphone" className="w-4 h-4" />
+                                                    Mẹo ĐT: Chạm giữ ảnh để "Lưu vào Ảnh"
+                                                </div>
+                                                <img src={receiptImgUrl} className="w-full h-auto shadow-md rounded-2xl block border border-gray-200" alt="Hóa đơn" />
+                                            </div>
+                                        ) 
+                                    )}
                                 </div>
-                                <div className="p-4 bg-white flex flex-col gap-3 flex-shrink-0 border-t border-gray-100">
-                                    <button onClick={handleDownloadSingle} disabled={isGenerating} className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl shadow-sm flex justify-center items-center gap-2 transition-all">
-                                        <Icon name="download" className="w-5 h-5" /> TẢI ẢNH NÀY VỀ MÁY
-                                    </button>
-                                    <button onClick={() => setReceiptRoom(null)} className="w-full py-2.5 bg-gray-100 text-gray-600 font-bold text-sm rounded-xl flex justify-center items-center hover:bg-gray-200 transition-all">
-                                        Đóng
+
+                                <div className="p-4 bg-white flex flex-col gap-2 flex-shrink-0 border-t border-gray-100">
+                                    <p className="text-center text-[11px] text-gray-400 mb-1 italic">Hoặc dùng nút tải về nếu sử dụng máy tính</p>
+                                    <button onClick={() => {
+                                        const link = document.createElement('a'); link.href = receiptImgUrl; link.download = `HoaDon_P${receiptRoom.name}.png`; link.click();
+                                    }} disabled={isGenerating} className="w-full py-3.5 bg-gray-900 hover:bg-black text-white font-bold text-sm rounded-xl shadow-sm flex justify-center items-center gap-2 transition-all">
+                                        <Icon name="download" className="w-4 h-4" /> Tải về máy
                                     </button>
                                 </div>
                             </div>
@@ -500,12 +519,9 @@
             const syncTimeout = useRef(null);
             const skipFetchRef = useRef(false);
 
-            // BỘ SỬA LỖI TỰ ĐỘNG XÓA DỮ LIỆU MẪU KHI SHEET TRỐNG
             const wipeInitialData = () => {
                 const cleanData = { buildings: [], rooms: [] };
-                setData(cleanData);
-                saveStorageData(currentMonth, currentYear, cleanData);
-                return cleanData;
+                setData(cleanData); saveStorageData(currentMonth, currentYear, cleanData); return cleanData;
             };
 
             const syncToSheets = useCallback(async (currentData, month = currentMonth, year = currentYear) => {
@@ -532,18 +548,14 @@
                     
                     if (Array.isArray(resData)) {
                         if (resData.length <= 1) {
-                            // Sheet chỉ có tiêu đề (không có data) -> Dọn sạch dữ liệu mẫu
                             wipeInitialData();
                             setSyncStatus({ text: 'Sổ mới trống', color: 'text-gray-400' });
                             return true;
                         }
 
-                        let newBuildings = [];
-                        let newRooms = [];
-                        let currentBuildingName = "";
-                        let sheetNeedsCorrection = false;
+                        let newBuildings = []; let newRooms = [];
+                        let currentBuildingName = ""; let sheetNeedsCorrection = false;
                         
-                        // Mapping Cột (Cho bản 12 cột)
                         const header = resData[0];
                         const colIdx = {
                             dienCu: header.indexOf("Điện Cũ") >= 0 ? header.indexOf("Điện Cũ") : 3, 
