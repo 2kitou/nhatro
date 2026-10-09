@@ -44,7 +44,7 @@
             localStorage.setItem(key, JSON.stringify(data));
         };
 
-        // ĐÃ DỌN DẸP SẠCH OBJECT INITIAL_DATA (Bỏ Tenant, Phone)
+        // Dữ liệu mẫu (Sẽ tự động bị xóa khi tải được dữ liệu thật từ Sheet)
         const INITIAL_DATA = { buildings: [{ id: 'khu_a', name: 'Khu Trọ Mới', rates: { elec: 3500, water: 14000, service: 50000 } }], rooms: [{ id: 'r_1', buildingId: 'khu_a', name: '101', price: 1500000, debt: 0, lastElec: 0, lastWater: 0, currentElec: null, currentWater: null, paymentStatus: 'none', subDebt: 0 }] };
 
         const Icon = ({ name, className }) => {
@@ -66,7 +66,6 @@
             return Number(room.price) + (usedElec * rates.elec) + (usedWater * rates.water) + Number(rates.service) + carriedDebt;
         };
 
-        // GIAO DIỆN HÓA ĐƠN SẠCH SẼ & TỐI GIẢN
         const ReceiptTemplate = ({ room, month, year, rates }) => {
             if(!room || !rates) return null;
             const newElec = room.currentElec !== null ? room.currentElec : room.lastElec; 
@@ -297,6 +296,7 @@
                             </div>
                         </div>
 
+                        {/* NÚT TẢI HÀNG LOẠT (FILE ZIP) */}
                         <div className="mb-4">
                             <button onClick={handleBatchZip} disabled={isGeneratingZip} className="w-full py-3.5 bg-blue-600 text-white font-bold rounded-xl text-sm flex items-center justify-center gap-2 shadow-sm transition-all hover:bg-blue-700">
                                 {isGeneratingZip ? <Icon name="loader" className="w-5 h-5 animate-spin" /> : <Icon name="archive" className="w-5 h-5" />}
@@ -343,6 +343,7 @@
                         </div>
                     </div>
 
+                    {/* HIỂN THỊ 1 HÓA ĐƠN ĐỂ TẢI VỀ */}
                     {receiptRoom && (
                         <div className="fixed inset-0 bg-black/70 z-[9999] flex flex-col items-center justify-center p-4 fade-in backdrop-blur-sm">
                             <div className="bg-white w-full max-w-[420px] max-h-[90vh] rounded-3xl overflow-hidden shadow-2xl flex flex-col">
@@ -367,6 +368,7 @@
                         </div>
                     )}
 
+                    {/* VÙNG CHỨA ẨN ĐỂ RENDER BILL */}
                     <div className="fixed top-[-9999px] left-[-9999px]">
                         <div ref={receiptRef}>
                             <ReceiptTemplate room={receiptRoom} month={currentMonth} year={currentYear} rates={currentRates} />
@@ -498,6 +500,14 @@
             const syncTimeout = useRef(null);
             const skipFetchRef = useRef(false);
 
+            // BỘ SỬA LỖI TỰ ĐỘNG XÓA DỮ LIỆU MẪU KHI SHEET TRỐNG
+            const wipeInitialData = () => {
+                const cleanData = { buildings: [], rooms: [] };
+                setData(cleanData);
+                saveStorageData(currentMonth, currentYear, cleanData);
+                return cleanData;
+            };
+
             const syncToSheets = useCallback(async (currentData, month = currentMonth, year = currentYear) => {
                 if (!SCRIPT_URL) return;
                 setSyncStatus({ text: 'Đang lưu...', color: 'text-yellow-400' });
@@ -520,11 +530,20 @@
                     const res = await fetch(`${SCRIPT_URL}?month=${month}&year=${year}&t=${Date.now()}`);
                     const resData = await res.json();
                     
-                    if (Array.isArray(resData) && resData.length > 1) {
-                        let parsedData = { buildings: [...data.buildings], rooms: [...data.rooms] };
+                    if (Array.isArray(resData)) {
+                        if (resData.length <= 1) {
+                            // Sheet chỉ có tiêu đề (không có data) -> Dọn sạch dữ liệu mẫu
+                            wipeInitialData();
+                            setSyncStatus({ text: 'Sổ mới trống', color: 'text-gray-400' });
+                            return true;
+                        }
+
+                        let newBuildings = [];
+                        let newRooms = [];
                         let currentBuildingName = "";
+                        let sheetNeedsCorrection = false;
                         
-                        // MAPPING CỘT THÔNG MINH (CHỐNG LỖI KHI BẠN CHƯA KỊP XÓA CỘT TRÊN GOOGLE SHEETS)
+                        // Mapping Cột (Cho bản 12 cột)
                         const header = resData[0];
                         const colIdx = {
                             dienCu: header.indexOf("Điện Cũ") >= 0 ? header.indexOf("Điện Cũ") : 3, 
@@ -539,6 +558,8 @@
 
                         for (let i = 1; i < resData.length; i++) {
                             const row = resData[i];
+                            if (!row[1] && !row[2] && !currentBuildingName) continue; 
+
                             const buildingName = row[1] ? String(row[1]).trim() : currentBuildingName;
                             if (row[1]) currentBuildingName = buildingName;
                             
@@ -552,29 +573,42 @@
                             
                             const daThanhToanSheet = row[colIdx.daThanhToan];
                             const tongTienSheet = Number(row[colIdx.tongTien] || 0);
-                            let computedStatus = 'none'; let computedSubDebt = 0;
-                            
-                            if (daThanhToanSheet !== "" && daThanhToanSheet !== null && daThanhToanSheet !== undefined) {
-                                const paidNum = Number(daThanhToanSheet);
-                                if (paidNum === tongTienSheet && tongTienSheet > 0) { computedStatus = 'paid'; } 
-                                else if (paidNum < tongTienSheet) { computedStatus = 'debt'; computedSubDebt = tongTienSheet - paidNum; } 
-                                else if (paidNum > tongTienSheet) { computedStatus = 'excess'; computedSubDebt = paidNum - tongTienSheet; } 
-                                else if (paidNum === 0 && tongTienSheet > 0) { computedStatus = 'none'; }
+
+                            let b = newBuildings.find(b => b.name === buildingName);
+                            if (!b) { 
+                                const oldB = data.buildings.find(ob => ob.name === buildingName);
+                                b = { id: oldB ? oldB.id : 'b_' + Date.now() + i, name: buildingName, rates: oldB ? oldB.rates : { elec: 3500, water: 14000, service: 50000 } }; 
+                                newBuildings.push(b); 
                             }
 
-                            let b = parsedData.buildings.find(b => b.name === buildingName);
-                            if (!b) { b = { id: 'b_' + Date.now() + i, name: buildingName, rates: { elec: 3500, water: 14000, service: 50000 } }; parsedData.buildings.push(b); }
+                            const usedE = Math.max(0, (currentElec !== null ? currentElec : lastElec) - lastElec);
+                            const usedW = Math.max(0, (currentWater !== null ? currentWater : lastWater) - lastWater);
+                            const expectedTotal = price + (usedE * b.rates.elec) + (usedW * b.rates.water) + b.rates.service + debt;
                             
-                            let rIndex = parsedData.rooms.findIndex(r => r.name === roomNameRaw && r.buildingId === b.id);
-                            if (rIndex >= 0) {
-                                parsedData.rooms[rIndex] = { ...parsedData.rooms[rIndex], price, lastElec, currentElec, lastWater, currentWater, debt, paymentStatus: computedStatus, subDebt: computedSubDebt };
-                            } else {
-                                parsedData.rooms.push({ id: 'r_' + Date.now() + i, buildingId: b.id, name: roomNameRaw, price, debt, lastElec, currentElec, lastWater, currentWater, paymentStatus: computedStatus, subDebt: computedSubDebt });
+                            if (expectedTotal !== tongTienSheet) sheetNeedsCorrection = true;
+                            
+                            let computedStatus = 'none'; let computedSubDebt = 0;
+                            if (daThanhToanSheet !== "" && daThanhToanSheet !== null && daThanhToanSheet !== undefined) {
+                                const paidNum = Number(daThanhToanSheet);
+                                if (paidNum === expectedTotal && expectedTotal > 0) { computedStatus = 'paid'; } 
+                                else if (paidNum < expectedTotal) { computedStatus = 'debt'; computedSubDebt = expectedTotal - paidNum; } 
+                                else if (paidNum > expectedTotal) { computedStatus = 'excess'; computedSubDebt = paidNum - expectedTotal; } 
+                                else if (paidNum === 0 && expectedTotal > 0) { computedStatus = 'none'; }
                             }
+                            
+                            newRooms.push({ id: 'r_' + Date.now() + i, buildingId: b.id, name: roomNameRaw, price, debt, lastElec, currentElec, lastWater, currentWater, paymentStatus: computedStatus, subDebt: computedSubDebt });
                         }
+                        
+                        const parsedData = { buildings: newBuildings, rooms: newRooms };
                         setData(parsedData); saveStorageData(month, year, parsedData);
-                        setSyncStatus({ text: 'Dữ liệu mới nhất', color: 'text-green-400' });
-                        setTimeout(() => setSyncStatus({ text: '', color: '' }), 2500);
+                        
+                        if (sheetNeedsCorrection) {
+                            setSyncStatus({ text: 'Đang sửa lỗi Sheet...', color: 'text-yellow-400' });
+                            syncToSheets(parsedData, month, year);
+                        } else {
+                            setSyncStatus({ text: 'Dữ liệu mới nhất', color: 'text-green-400' });
+                            setTimeout(() => setSyncStatus({ text: '', color: '' }), 2500);
+                        }
                         return true;
                     }
                 } catch (e) { setSyncStatus({ text: 'Lỗi tải Sheet', color: 'text-red-400' }); }
@@ -582,17 +616,14 @@
             };
 
             useEffect(() => {
-                if (skipFetchRef.current) {
-                    skipFetchRef.current = false;
-                } else {
-                    fetchDataFromSheet(currentMonth, currentYear);
-                }
+                if (skipFetchRef.current) { skipFetchRef.current = false; } 
+                else { fetchDataFromSheet(currentMonth, currentYear); }
                 const handleVisibilityChange = () => { if (document.visibilityState === 'visible') fetchDataFromSheet(currentMonth, currentYear); };
                 document.addEventListener('visibilitychange', handleVisibilityChange);
                 return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
             }, [currentMonth, currentYear]);
 
-            useEffect(() => { if (data.buildings.length > 0 && !data.buildings.find(b => b.id === selectedBuilding)) setSelectedBuilding(data.buildings[0].id); }, [data.buildings, selectedBuilding]);
+            useEffect(() => { if (data.buildings.length > 0 && !data.buildings.find(b => b.id === selectedBuilding)) setSelectedBuilding(data.buildings[0]?.id || ''); }, [data.buildings, selectedBuilding]);
 
             const handlePrevMonth = () => { if (currentMonth === 1) { setCurrentMonth(12); setCurrentYear(currentYear - 1); } else { setCurrentMonth(currentMonth - 1); } };
             
