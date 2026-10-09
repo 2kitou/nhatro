@@ -6,7 +6,6 @@
     <title>Quản Lý Nhà Trọ</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    <!-- THÊM THƯ VIỆN NÉN ZIP -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -45,7 +44,8 @@
             localStorage.setItem(key, JSON.stringify(data));
         };
 
-        const INITIAL_DATA = { buildings: [{ id: 'khu_a', name: 'Khu Trọ Mới', rates: { elec: 3500, water: 14000, service: 50000 } }], rooms: [{ id: 'r_1', buildingId: 'khu_a', name: '101', tenant: '', phone: '', price: 1500000, debt: 0, lastElec: 0, lastWater: 0, currentElec: null, currentWater: null, paymentStatus: 'none', subDebt: 0 }] };
+        // ĐÃ DỌN DẸP SẠCH OBJECT INITIAL_DATA (Bỏ Tenant, Phone)
+        const INITIAL_DATA = { buildings: [{ id: 'khu_a', name: 'Khu Trọ Mới', rates: { elec: 3500, water: 14000, service: 50000 } }], rooms: [{ id: 'r_1', buildingId: 'khu_a', name: '101', price: 1500000, debt: 0, lastElec: 0, lastWater: 0, currentElec: null, currentWater: null, paymentStatus: 'none', subDebt: 0 }] };
 
         const Icon = ({ name, className }) => {
             const spanRef = useRef(null);
@@ -66,7 +66,7 @@
             return Number(room.price) + (usedElec * rates.elec) + (usedWater * rates.water) + Number(rates.service) + carriedDebt;
         };
 
-        // GIAO DIỆN HÓA ĐƠN CHUẨN MỚI (Tái sử dụng cho cả ZIP và Tải lẻ)
+        // GIAO DIỆN HÓA ĐƠN SẠCH SẼ & TỐI GIẢN
         const ReceiptTemplate = ({ room, month, year, rates }) => {
             if(!room || !rates) return null;
             const newElec = room.currentElec !== null ? room.currentElec : room.lastElec; 
@@ -78,20 +78,14 @@
 
             return (
                 <div className="w-[420px] bg-white p-7 relative overflow-hidden" style={{ fontFamily: "'Inter', sans-serif" }}>
-                    {/* DẤU MỘC TÊN PHÒNG KHỔNG LỒ GIÚP DỄ NHÌN TRONG THUMBNAIL */}
                     <div className="absolute top-0 right-0 bg-blue-600 text-white px-5 py-3 rounded-bl-[2rem] shadow-md border-b-[3px] border-l-[3px] border-blue-800 z-10 flex flex-col items-center justify-center">
                         <span className="text-[10px] uppercase font-bold tracking-widest opacity-80 mb-[-2px]">PHÒNG</span>
                         <span className="text-4xl font-black leading-none">{room.name}</span>
                     </div>
                     
-                    <div className="text-left mb-6 border-b-2 border-dashed border-gray-200 pb-5 pt-2">
+                    <div className="text-left mb-8 border-b-2 border-dashed border-gray-200 pb-5 pt-2">
                         <h1 className="text-[28px] font-black text-gray-900 tracking-tight">HÓA ĐƠN</h1>
                         <p className="text-gray-500 text-base mt-1 font-medium">Tháng {month}/{year}</p>
-                    </div>
-                    
-                    <div className="mb-6 bg-gray-50 p-4 rounded-xl border border-gray-200 text-base shadow-sm">
-                        <div className="flex justify-between mb-2"><span className="text-gray-500 font-medium">Khách thuê:</span><span className="font-bold text-gray-900 text-lg truncate max-w-[200px] text-right">{room.tenant || 'Khách'}</span></div>
-                        <div className="flex justify-between"><span className="text-gray-500 font-medium">Số điện thoại:</span><span className="font-bold text-gray-900">{room.phone || '---'}</span></div>
                     </div>
                     
                     <div className="space-y-4 mb-8 text-base">
@@ -171,7 +165,6 @@
                         <div className="flex-1 px-4 py-6 overflow-y-auto">
                             <div className="text-center mb-6">
                                 <h2 className="text-3xl font-bold text-gray-900">Phòng {currentRoom.name}</h2>
-                                <p className="text-base text-gray-500 mt-1">{currentRoom.tenant || 'Chưa nhập tên'}</p>
                             </div>
                             <div className="space-y-4">
                                 <div className="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm">
@@ -216,7 +209,6 @@
                 return sum;
             }, 0);
 
-            // XỬ LÝ MỞ HÓA ĐƠN LẺ
             const handleCreateReceipt = (room) => {
                 setReceiptRoom(room); setReceiptImgUrl(''); setIsGenerating(true);
                 setTimeout(() => generateImage(), 400);
@@ -231,7 +223,6 @@
                 } catch (err) { setIsGenerating(false); }
             };
 
-            // TẢI 1 ẢNH TRỰC TIẾP VỀ MÁY
             const handleDownloadSingle = () => {
                 const link = document.createElement('a');
                 link.href = receiptImgUrl;
@@ -241,21 +232,17 @@
                 setTimeout(() => setToastMsg(''), 2500);
             };
 
-            // TẢI HÀNG LOẠT (FILE ZIP)
             const handleBatchZip = async () => {
                 const readyRooms = filteredRooms.filter(r => r.currentElec !== null && r.currentWater !== null);
                 if(readyRooms.length === 0) {
-                    setToastMsg("Chưa có phòng nào được chốt số điện nước!");
-                    setTimeout(() => setToastMsg(''), 2500);
-                    return;
+                    setToastMsg("Chưa có phòng nào chốt số!");
+                    setTimeout(() => setToastMsg(''), 2500); return;
                 }
 
                 setIsGeneratingZip(true);
                 try {
-                    const JSZip = window.JSZip;
-                    const zip = new JSZip();
+                    const JSZip = window.JSZip; const zip = new JSZip();
                     
-                    // Lặp qua từng phòng để vẽ và nhét vào ZIP
                     for (let r of readyRooms) {
                         const el = document.getElementById(`receipt-batch-${r.id}`);
                         if (el) {
@@ -265,20 +252,14 @@
                             zip.file(`HoaDon_P${r.name}_Thang${currentMonth}.png`, data, {base64: true});
                         }
                     }
-                    
                     const content = await zip.generateAsync({type: "blob"});
                     const link = document.createElement('a');
                     link.href = URL.createObjectURL(content);
                     link.download = `TatCa_HoaDon_Thang_${currentMonth}_${currentYear}.zip`;
                     link.click();
-                    
-                    setToastMsg('Đã tải thành công File ZIP!');
-                } catch(e) {
-                    console.error(e);
-                    setToastMsg("Lỗi tạo file ZIP!");
-                }
-                setTimeout(() => setToastMsg(''), 3000);
-                setIsGeneratingZip(false);
+                    setToastMsg('Đã tải File ZIP chứa ảnh!');
+                } catch(e) { setToastMsg("Lỗi tạo file ZIP!"); }
+                setTimeout(() => setToastMsg(''), 3000); setIsGeneratingZip(false);
             };
 
             const handleStatusChange = (roomId, status) => {
@@ -316,7 +297,6 @@
                             </div>
                         </div>
 
-                        {/* NÚT TẢI HÀNG LOẠT (FILE ZIP) */}
                         <div className="mb-4">
                             <button onClick={handleBatchZip} disabled={isGeneratingZip} className="w-full py-3.5 bg-blue-600 text-white font-bold rounded-xl text-sm flex items-center justify-center gap-2 shadow-sm transition-all hover:bg-blue-700">
                                 {isGeneratingZip ? <Icon name="loader" className="w-5 h-5 animate-spin" /> : <Icon name="archive" className="w-5 h-5" />}
@@ -333,10 +313,7 @@
                                 return (
                                     <div key={room.id} className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm">
                                         <div className="flex justify-between items-start mb-3">
-                                            <div>
-                                                <h4 className="font-bold text-xl text-gray-900">P.{room.name}</h4>
-                                                <p className="text-sm text-gray-500 mt-0.5">{room.tenant || 'Chưa nhập tên'}</p>
-                                            </div>
+                                            <h4 className="font-bold text-2xl text-gray-900">P.{room.name}</h4>
                                             <div className="text-right">
                                                 <span className="text-xs text-gray-400 uppercase font-medium">Tổng tiền</span>
                                                 <p className="font-bold text-lg text-gray-900">{total.toLocaleString('vi-VN')}đ</p>
@@ -366,7 +343,6 @@
                         </div>
                     </div>
 
-                    {/* HIỂN THỊ 1 HÓA ĐƠN ĐỂ TẢI VỀ */}
                     {receiptRoom && (
                         <div className="fixed inset-0 bg-black/70 z-[9999] flex flex-col items-center justify-center p-4 fade-in backdrop-blur-sm">
                             <div className="bg-white w-full max-w-[420px] max-h-[90vh] rounded-3xl overflow-hidden shadow-2xl flex flex-col">
@@ -391,13 +367,10 @@
                         </div>
                     )}
 
-                    {/* VÙNG CHỨA ẨN ĐỂ RENDER BILL (CHO CẢ ZIP VÀ TẢI LẺ) */}
                     <div className="fixed top-[-9999px] left-[-9999px]">
-                        {/* 1. Dùng cho Hóa đơn đang xem */}
                         <div ref={receiptRef}>
                             <ReceiptTemplate room={receiptRoom} month={currentMonth} year={currentYear} rates={currentRates} />
                         </div>
-                        {/* 2. Dùng cho việc nén ZIP toàn bộ */}
                         {filteredRooms.filter(r => r.currentElec !== null && r.currentWater !== null).map(r => (
                             <div key={`batch-${r.id}`} id={`receipt-batch-${r.id}`}>
                                 <ReceiptTemplate room={r} month={currentMonth} year={currentYear} rates={currentRates} />
@@ -441,7 +414,7 @@
             };
             const addRoom = () => {
                 if(!selectedBuilding) { alert("Vui lòng thêm Khu Vực trước!"); return; }
-                const newData = { ...data, rooms: [...data.rooms, { id: 'r_' + Date.now(), buildingId: selectedBuilding, name: 'Mới', tenant: '', phone: '', price: 2000000, debt: 0, lastElec: 0, lastWater: 0, currentElec: null, currentWater: null, paymentStatus: 'none', subDebt: 0 }] };
+                const newData = { ...data, rooms: [...data.rooms, { id: 'r_' + Date.now(), buildingId: selectedBuilding, name: 'Mới', price: 2000000, debt: 0, lastElec: 0, lastWater: 0, currentElec: null, currentWater: null, paymentStatus: 'none', subDebt: 0 }] };
                 setData(newData); saveStorageData(currentMonth, currentYear, newData); syncToSheets(newData);
             };
             const deleteRoom = (id) => {
@@ -489,16 +462,14 @@
                                 <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Danh Sách Phòng & Nợ/Dư Kỳ Trước</span>
                                 <div className="bg-gray-50 p-3 rounded-2xl border border-gray-200 flex gap-2"><input type="number" placeholder="Set đồng giá phòng..." value={bulkPrice} onChange={e => setBulkPrice(e.target.value)} className="flex-1 bg-white p-2.5 rounded-xl border border-gray-200 font-medium text-sm outline-none" /><button onClick={applyBulkPrice} className="bg-gray-900 text-white font-semibold text-xs px-4 rounded-xl">Áp dụng</button></div>
                                 <div className="bg-white rounded-2xl border border-gray-200 overflow-x-auto shadow-sm">
-                                    <table className="w-full text-left border-collapse min-w-[550px]">
-                                        <thead><tr className="bg-gray-50 text-gray-500 text-xs border-b border-gray-200"><th className="p-3 font-semibold w-16">Phòng</th><th className="p-3 font-semibold w-28">Giá (đ)</th><th className="p-3 font-semibold w-28 text-amber-700">Nợ/Dư cũ</th><th className="p-3 font-semibold w-32">Khách</th><th className="p-3 font-semibold w-24">SĐT</th><th className="p-3 font-semibold w-12 text-center">Xóa</th></tr></thead>
+                                    <table className="w-full text-left border-collapse min-w-[350px]">
+                                        <thead><tr className="bg-gray-50 text-gray-500 text-xs border-b border-gray-200"><th className="p-3 font-semibold w-20">Phòng</th><th className="p-3 font-semibold flex-1">Giá (đ)</th><th className="p-3 font-semibold w-28 text-amber-700">Nợ/Dư cũ</th><th className="p-3 font-semibold w-14 text-center">Xóa</th></tr></thead>
                                         <tbody>
                                             {filteredRooms.map((room, index) => (
                                                 <tr key={room.id} className="border-b border-gray-100">
                                                     <td className="p-2"><input value={room.name} onChange={e => handleRoomUpdate(room.id, 'name', e.target.value)} className="w-full bg-gray-50 p-2 rounded-lg font-bold text-sm text-center outline-none" /></td>
                                                     <td className="p-2"><input type="number" value={room.price} onChange={e => handleRoomUpdate(room.id, 'price', e.target.value)} className="w-full bg-gray-50 border border-gray-200 p-2 rounded-lg font-medium outline-none text-xs" /></td>
                                                     <td className="p-2"><input type="number" value={room.debt !== undefined ? room.debt : 0} onChange={e => handleRoomUpdate(room.id, 'debt', e.target.value)} className="w-full bg-amber-50 border border-amber-200 p-2 rounded-lg font-bold text-amber-800 outline-none text-xs" /></td>
-                                                    <td className="p-2"><input value={room.tenant} placeholder="Trống" onChange={e => handleRoomUpdate(room.id, 'tenant', e.target.value)} className="w-full bg-gray-50 border border-gray-200 p-2 rounded-lg text-xs outline-none" /></td>
-                                                    <td className="p-2"><input value={room.phone} placeholder="SĐT..." onChange={e => handleRoomUpdate(room.id, 'phone', e.target.value)} className="w-full bg-gray-50 border border-gray-200 p-2 rounded-lg text-xs outline-none" /></td>
                                                     <td className="p-2 text-center"><button onClick={() => deleteRoom(room.id)} className="text-gray-400 hover:text-gray-700 p-1"><Icon name="trash-2" className="w-4 h-4" /></button></td>
                                                 </tr>
                                             ))}
@@ -553,19 +524,34 @@
                         let parsedData = { buildings: [...data.buildings], rooms: [...data.rooms] };
                         let currentBuildingName = "";
                         
+                        // MAPPING CỘT THÔNG MINH (CHỐNG LỖI KHI BẠN CHƯA KỊP XÓA CỘT TRÊN GOOGLE SHEETS)
+                        const header = resData[0];
+                        const colIdx = {
+                            dienCu: header.indexOf("Điện Cũ") >= 0 ? header.indexOf("Điện Cũ") : 3, 
+                            dienMoi: header.indexOf("Điện Mới") >= 0 ? header.indexOf("Điện Mới") : 4,
+                            nuocCu: header.indexOf("Nước Cũ") >= 0 ? header.indexOf("Nước Cũ") : 5,
+                            nuocMoi: header.indexOf("Nước Mới") >= 0 ? header.indexOf("Nước Mới") : 6,
+                            tienPhong: header.indexOf("Tiền Phòng") >= 0 ? header.indexOf("Tiền Phòng") : 7,
+                            debt: header.indexOf("Nợ/Dư Kỳ Trước") >= 0 ? header.indexOf("Nợ/Dư Kỳ Trước") : 9,
+                            daThanhToan: header.indexOf("Đã Thanh Toán") >= 0 ? header.indexOf("Đã Thanh Toán") : 10,
+                            tongTien: header.indexOf("Tổng Hóa Đơn") >= 0 ? header.indexOf("Tổng Hóa Đơn") : 11
+                        };
+
                         for (let i = 1; i < resData.length; i++) {
                             const row = resData[i];
                             const buildingName = row[1] ? String(row[1]).trim() : currentBuildingName;
                             if (row[1]) currentBuildingName = buildingName;
                             
                             const roomNameRaw = String(row[2]).replace('Phòng ', '').trim();
-                            const tenant = String(row[3]); const phone = String(row[4]);
-                            const lastElec = Number(row[5]); const currentElec = row[6] === "" ? null : Number(row[6]);
-                            const lastWater = row[7]; const currentWater = row[8] === "" ? null : Number(row[8]);
-                            const price = Number(row[9]); const debt = Number(row[11]);
+                            const lastElec = Number(row[colIdx.dienCu] || 0); 
+                            const currentElec = row[colIdx.dienMoi] === "" ? null : Number(row[colIdx.dienMoi]);
+                            const lastWater = Number(row[colIdx.nuocCu] || 0); 
+                            const currentWater = row[colIdx.nuocMoi] === "" ? null : Number(row[colIdx.nuocMoi]);
+                            const price = Number(row[colIdx.tienPhong] || 0); 
+                            const debt = Number(row[colIdx.debt] || 0);
                             
-                            const daThanhToanSheet = row[12];
-                            const tongTienSheet = Number(row[13]) || 0;
+                            const daThanhToanSheet = row[colIdx.daThanhToan];
+                            const tongTienSheet = Number(row[colIdx.tongTien] || 0);
                             let computedStatus = 'none'; let computedSubDebt = 0;
                             
                             if (daThanhToanSheet !== "" && daThanhToanSheet !== null && daThanhToanSheet !== undefined) {
@@ -581,9 +567,9 @@
                             
                             let rIndex = parsedData.rooms.findIndex(r => r.name === roomNameRaw && r.buildingId === b.id);
                             if (rIndex >= 0) {
-                                parsedData.rooms[rIndex] = { ...parsedData.rooms[rIndex], tenant, phone, price, lastElec, currentElec, lastWater, currentWater, debt, paymentStatus: computedStatus, subDebt: computedSubDebt };
+                                parsedData.rooms[rIndex] = { ...parsedData.rooms[rIndex], price, lastElec, currentElec, lastWater, currentWater, debt, paymentStatus: computedStatus, subDebt: computedSubDebt };
                             } else {
-                                parsedData.rooms.push({ id: 'r_' + Date.now() + i, buildingId: b.id, name: roomNameRaw, tenant, phone, price, debt, lastElec, currentElec, lastWater, currentWater, paymentStatus: computedStatus, subDebt: computedSubDebt });
+                                parsedData.rooms.push({ id: 'r_' + Date.now() + i, buildingId: b.id, name: roomNameRaw, price, debt, lastElec, currentElec, lastWater, currentWater, paymentStatus: computedStatus, subDebt: computedSubDebt });
                             }
                         }
                         setData(parsedData); saveStorageData(month, year, parsedData);
