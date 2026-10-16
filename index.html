@@ -641,13 +641,12 @@
                     nuocCu: header.indexOf("Nước Cũ") >= 0 ? header.indexOf("Nước Cũ") : 5,
                     nuocMoi: header.indexOf("Nước Mới") >= 0 ? header.indexOf("Nước Mới") : 6,
                     tienPhong: header.indexOf("Tiền Phòng") >= 0 ? header.indexOf("Tiền Phòng") : 7,
-                    phiKhac: header.indexOf("Phí Khác") >= 0 ? header.indexOf("Phí Khác") : 8,
+                    phiKhac: header.findIndex(h => h.includes("Phí Khác")) >= 0 ? header.findIndex(h => h.includes("Phí Khác")) : 8,
                     debt: header.indexOf("Nợ/Dư Kỳ Trước") >= 0 ? header.indexOf("Nợ/Dư Kỳ Trước") : 9,
                     daThanhToan: header.indexOf("Đã Thanh Toán") >= 0 ? header.indexOf("Đã Thanh Toán") : 10,
                     tongTien: header.indexOf("Tổng Hóa Đơn") >= 0 ? header.indexOf("Tổng Hóa Đơn") : 11,
                     donGiaDien: header.indexOf("Đơn Giá Điện") >= 0 ? header.indexOf("Đơn Giá Điện") : 12,
-                    donGiaNuoc: header.indexOf("Đơn Giá Nước") >= 0 ? header.indexOf("Đơn Giá Nước") : 13,
-                    phiDichVu: header.indexOf("Phí Dịch Vụ") >= 0 ? header.indexOf("Phí Dịch Vụ") : 14
+                    donGiaNuoc: header.indexOf("Đơn Giá Nước") >= 0 ? header.indexOf("Đơn Giá Nước") : 13
                 };
 
                 for (let i = 1; i < resData.length; i++) {
@@ -671,7 +670,7 @@
                     // MẮT THẦN ĐỌC GIÁ ĐIỆN, NƯỚC, DỊCH VỤ TỪ GOOGLE SHEETS
                     const elecRate = row[colIdx.donGiaDien] !== undefined && row[colIdx.donGiaDien] !== "" ? Number(row[colIdx.donGiaDien]) : 3500;
                     const waterRate = row[colIdx.donGiaNuoc] !== undefined && row[colIdx.donGiaNuoc] !== "" ? Number(row[colIdx.donGiaNuoc]) : 14000;
-                    const serviceRate = row[colIdx.phiDichVu] !== undefined && row[colIdx.phiDichVu] !== "" ? Number(row[colIdx.phiDichVu]) : Number(row[colIdx.phiKhac] || 50000);
+                    const serviceRate = row[colIdx.phiKhac] !== undefined && row[colIdx.phiKhac] !== "" ? Number(row[colIdx.phiKhac]) : 50000;
 
                     let b = newBuildings.find(b => b.name === buildingName);
                     if (!b) { 
