@@ -44,7 +44,7 @@
             localStorage.setItem(key, JSON.stringify(data));
         };
 
-        const INITIAL_DATA = { buildings: [{ id: 'khu_a', name: 'Khu Trọ Mới', rates: { elec: 3500, water: 14000, service: 50000 } }], rooms: [{ id: 'r_1', buildingId: 'khu_a', name: '101', price: 1500000, debt: 0, lastElec: 0, lastWater: 0, currentElec: null, currentWater: null, paymentStatus: 'none', subDebt: 0 }] };
+        const INITIAL_DATA = { buildings: [], rooms: [] };
 
         const Icon = ({ name, className }) => {
             const spanRef = useRef(null);
@@ -132,7 +132,7 @@
             const tapeRef = useRef(null);
             const elecRef = useRef(null);
             const waterRef = useRef(null);
-            const filteredRooms = data.rooms.filter(r => r.buildingId === selectedBuilding);
+            const filteredRooms = data.buildings ? data.rooms.filter(r => r.buildingId === selectedBuilding) : [];
             const currentRoom = filteredRooms[currentIndex];
 
             useEffect(() => {
@@ -156,7 +156,8 @@
                 }
             };
 
-            if (!selectedBuilding) return <div className="p-8 text-center text-gray-400 mt-10">Chưa có khu vực.</div>;
+            if (!data.buildings || data.buildings.length === 0) return <div className="p-8 text-center text-gray-400 mt-10">Hệ thống đang trống. Vui lòng thêm Khu Vực ở phần Cài Đặt.</div>;
+            if (!selectedBuilding) return <div className="p-8 text-center text-gray-400 mt-10">Chưa chọn khu vực.</div>;
             if (filteredRooms.length === 0) return <div className="p-8 text-center text-gray-400 mt-10">Khu vực này chưa có phòng.</div>;
             const isFilled = currentRoom && currentRoom.currentElec !== null && currentRoom.currentWater !== null;
 
@@ -210,6 +211,8 @@
             const [batchState, setBatchState] = useState({ isOpen: false, isGenerating: false, progress: 0, files: null });
             
             const receiptRef = useRef(null);
+
+            if (!data.buildings || data.buildings.length === 0) return <div className="p-8 text-center text-gray-400 mt-10">Hệ thống đang trống.</div>;
 
             const currentBuilding = data.buildings.find(b => b.id === selectedBuilding);
             const currentRates = currentBuilding?.rates || { elec: 0, water: 0, service: 0 };
@@ -437,8 +440,8 @@
 
         const TabCaiDat = ({ data, setData, selectedBuilding, setSelectedBuilding, currentMonth, currentYear, syncToSheets }) => {
             const [bulkPrice, setBulkPrice] = useState('');
-            const currentBuilding = data.buildings.find(b => b.id === selectedBuilding);
-            const filteredRooms = data.rooms.filter(r => r.buildingId === selectedBuilding);
+            const currentBuilding = data.buildings && data.buildings.length > 0 ? data.buildings.find(b => b.id === selectedBuilding) : null;
+            const filteredRooms = data.rooms ? data.rooms.filter(r => r.buildingId === selectedBuilding) : [];
 
             const handleRate = (field, val) => {
                 if(!currentBuilding) return;
@@ -451,13 +454,15 @@
                 setData(newData); saveStorageData(currentMonth, currentYear, newData); syncToSheets(newData);
             };
             const addBuilding = () => {
-                const newId = 'khu_' + Date.now(); const newData = { ...data, buildings: [...data.buildings, { id: newId, name: 'Khu Trọ Mới', rates: { elec: 3500, water: 14000, service: 50000 } }] };
+                const newId = 'khu_' + Date.now(); 
+                const newBuildings = data.buildings ? [...data.buildings, { id: newId, name: 'Khu Trọ Mới', rates: { elec: 3500, water: 14000, service: 50000 } }] : [{ id: newId, name: 'Khu Trọ Mới', rates: { elec: 3500, water: 14000, service: 50000 } }];
+                const newData = { ...data, buildings: newBuildings };
                 setData(newData); setSelectedBuilding(newId); saveStorageData(currentMonth, currentYear, newData); syncToSheets(newData);
             };
             const deleteBuilding = () => {
                 if(!selectedBuilding) return;
                 if(window.confirm(`Xóa toàn bộ ${currentBuilding.name} và các phòng bên trong?`)) {
-                    const newData = { ...data, buildings: data.buildings.filter(b => b.id !== selectedBuilding), rooms: data.rooms.filter(r => r.buildingId !== selectedBuilding) };
+                    const newData = { ...data, buildings: data.buildings.filter(b => b.id !== selectedBuilding), rooms: data.rooms ? data.rooms.filter(r => r.buildingId !== selectedBuilding) : [] };
                     setData(newData); saveStorageData(currentMonth, currentYear, newData); syncToSheets(newData); setSelectedBuilding(newData.buildings[0]?.id || '');
                 }
             };
@@ -468,7 +473,8 @@
             };
             const addRoom = () => {
                 if(!selectedBuilding) { alert("Vui lòng thêm Khu Vực trước!"); return; }
-                const newData = { ...data, rooms: [...data.rooms, { id: 'r_' + Date.now(), buildingId: selectedBuilding, name: 'Mới', price: 2000000, debt: 0, lastElec: 0, lastWater: 0, currentElec: null, currentWater: null, paymentStatus: 'none', subDebt: 0 }] };
+                const newRooms = data.rooms ? [...data.rooms, { id: 'r_' + Date.now(), buildingId: selectedBuilding, name: 'Mới', price: 2000000, debt: 0, lastElec: 0, lastWater: 0, currentElec: null, currentWater: null, paymentStatus: 'none', subDebt: 0 }] : [{ id: 'r_' + Date.now(), buildingId: selectedBuilding, name: 'Mới', price: 2000000, debt: 0, lastElec: 0, lastWater: 0, currentElec: null, currentWater: null, paymentStatus: 'none', subDebt: 0 }];
+                const newData = { ...data, rooms: newRooms };
                 setData(newData); saveStorageData(currentMonth, currentYear, newData); syncToSheets(newData);
             };
             const deleteRoom = (id) => {
@@ -487,7 +493,7 @@
                 <div className="flex flex-col h-full bg-white overflow-y-auto p-4 space-y-6 fade-in pb-20">
                     <div className="space-y-2">
                         <div className="flex justify-between items-end mb-1"><span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Chọn Khu Vực</span><button onClick={addBuilding} className="text-blue-600 font-semibold text-xs hover:underline">+ Thêm Khu</button></div>
-                        {data.buildings.length > 0 ? (
+                        {data.buildings && data.buildings.length > 0 ? (
                             <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
                                 <select className="w-full bg-gray-50 p-3.5 text-lg font-semibold text-gray-900 outline-none border-b border-gray-100" value={selectedBuilding} onChange={e => setSelectedBuilding(e.target.value)}>
                                     {data.buildings.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
@@ -499,7 +505,7 @@
                                     </div>
                                 )}
                             </div>
-                        ) : (<div className="p-4 bg-gray-50 border border-gray-200 rounded-xl text-center text-gray-500 text-sm">Chưa có khu vực nào.</div>)}
+                        ) : (<div className="p-4 bg-gray-50 border border-gray-200 rounded-xl text-center text-gray-500 text-sm">Chưa có khu vực nào. Hãy bấm Thêm Khu.</div>)}
                     </div>
 
                     {currentBuilding && (
@@ -545,15 +551,86 @@
             const [currentYear, setCurrentYear] = useState(date.getFullYear());
             const [data, setData] = useState(() => { const saved = loadStorageData(currentMonth, currentYear); return saved ? saved : INITIAL_DATA; });
             const [activeTab, setActiveTab] = useState('ghi_so');
-            const [selectedBuilding, setSelectedBuilding] = useState(data.buildings[0]?.id || '');
+            const [selectedBuilding, setSelectedBuilding] = useState('');
             const [syncStatus, setSyncStatus] = useState({ text: 'Đang kết nối...', color: 'text-blue-400' });
             
             const syncTimeout = useRef(null);
             const skipFetchRef = useRef(false);
 
+            useEffect(() => {
+                if (data.buildings && data.buildings.length > 0 && !selectedBuilding) {
+                    setSelectedBuilding(data.buildings[0].id);
+                }
+            }, [data.buildings, selectedBuilding]);
+
             const wipeInitialData = () => {
                 const cleanData = { buildings: [], rooms: [] };
                 setData(cleanData); saveStorageData(currentMonth, currentYear, cleanData); return cleanData;
+            };
+
+            const parseSheetData = (resData, currentBuildingsList = []) => {
+                let newBuildings = []; let newRooms = [];
+                let currentBuildingName = "";
+                
+                const header = resData[0];
+                const colIdx = {
+                    dienCu: header.indexOf("Điện Cũ") >= 0 ? header.indexOf("Điện Cũ") : 3, 
+                    dienMoi: header.indexOf("Điện Mới") >= 0 ? header.indexOf("Điện Mới") : 4,
+                    nuocCu: header.indexOf("Nước Cũ") >= 0 ? header.indexOf("Nước Cũ") : 5,
+                    nuocMoi: header.indexOf("Nước Mới") >= 0 ? header.indexOf("Nước Mới") : 6,
+                    tienPhong: header.indexOf("Tiền Phòng") >= 0 ? header.indexOf("Tiền Phòng") : 7,
+                    phiKhac: header.indexOf("Phí Khác") >= 0 ? header.indexOf("Phí Khác") : 8,
+                    debt: header.indexOf("Nợ/Dư Kỳ Trước") >= 0 ? header.indexOf("Nợ/Dư Kỳ Trước") : 9,
+                    daThanhToan: header.indexOf("Đã Thanh Toán") >= 0 ? header.indexOf("Đã Thanh Toán") : 10,
+                    tongTien: header.indexOf("Tổng Hóa Đơn") >= 0 ? header.indexOf("Tổng Hóa Đơn") : 11
+                };
+
+                for (let i = 1; i < resData.length; i++) {
+                    const row = resData[i];
+                    if (!row[1] && !row[2] && !currentBuildingName) continue; 
+
+                    const buildingName = row[1] ? String(row[1]).trim() : currentBuildingName;
+                    if (row[1]) currentBuildingName = buildingName;
+                    
+                    const roomNameRaw = String(row[2]).replace('Phòng ', '').trim();
+                    const lastElec = Number(row[colIdx.dienCu] || 0); 
+                    const currentElec = row[colIdx.dienMoi] === "" || row[colIdx.dienMoi] === undefined ? null : Number(row[colIdx.dienMoi]);
+                    const lastWater = Number(row[colIdx.nuocCu] || 0); 
+                    const currentWater = row[colIdx.nuocMoi] === "" || row[colIdx.nuocMoi] === undefined ? null : Number(row[colIdx.nuocMoi]);
+                    const price = Number(row[colIdx.tienPhong] || 0); 
+                    const debt = Number(row[colIdx.debt] || 0);
+                    const serviceFee = Number(row[colIdx.phiKhac] || 50000);
+                    
+                    const daThanhToanSheet = row[colIdx.daThanhToan];
+                    const tongTienSheet = Number(row[colIdx.tongTien] || 0);
+
+                    let b = newBuildings.find(b => b.name === buildingName);
+                    if (!b) { 
+                        const oldB = currentBuildingsList.find(ob => ob.name === buildingName);
+                        b = { id: oldB ? oldB.id : 'b_' + Date.now() + i, name: buildingName, rates: oldB ? { ...oldB.rates, service: serviceFee } : { elec: 3500, water: 14000, service: serviceFee } }; 
+                        newBuildings.push(b); 
+                    }
+
+                    const usedE = Math.max(0, (currentElec !== null ? currentElec : lastElec) - lastElec);
+                    const usedW = Math.max(0, (currentWater !== null ? currentWater : lastWater) - lastWater);
+                    const expectedTotal = price + (usedE * b.rates.elec) + (usedW * b.rates.water) + b.rates.service + debt;
+                    
+                    let computedStatus = 'none'; let computedSubDebt = 0;
+                    if (daThanhToanSheet !== "" && daThanhToanSheet !== null && daThanhToanSheet !== undefined) {
+                        const paidNum = Number(daThanhToanSheet);
+                        if (paidNum === expectedTotal && expectedTotal > 0) { computedStatus = 'paid'; } 
+                        else if (paidNum < expectedTotal) { computedStatus = 'debt'; computedSubDebt = expectedTotal - paidNum; } 
+                        else if (paidNum > expectedTotal) { computedStatus = 'excess'; computedSubDebt = paidNum - expectedTotal; } 
+                        else if (paidNum === 0 && expectedTotal > 0) { computedStatus = 'none'; }
+                    }
+
+                    // Look for existing room in current loaded data to keep UI stable
+                    const currentRoomsList = data && data.rooms ? data.rooms : [];
+                    const oldR = currentRoomsList.find(or => or.name === roomNameRaw && or.buildingId === b.id);
+                    const roomId = oldR ? oldR.id : 'r_' + Date.now() + i;
+                    newRooms.push({ id: roomId, buildingId: b.id, name: roomNameRaw, price, debt, lastElec, currentElec, lastWater, currentWater, paymentStatus: computedStatus, subDebt: computedSubDebt });
+                }
+                return { buildings: newBuildings, rooms: newRooms };
             };
 
             const syncToSheets = useCallback(async (currentData, month = currentMonth, year = currentYear) => {
@@ -575,23 +652,28 @@
                 if (!SCRIPT_URL) return;
                 setSyncStatus({ text: 'Đang tải...', color: 'text-blue-400' });
                 try {
-                    const res = await fetch(`${SCRIPT_URL}?month=${month}&year=${year}&t=${Date.now()}`);
+                    const res = await fetch(`${SCRIPT_URL}?month=${String(month).padStart(2, '0')}&year=${year}&t=${Date.now()}`);
                     const resData = await res.json();
                     
-                    let prevM = month - 1; let prevY = year;
-                    if (prevM < 1) { prevM = 12; prevY -= 1; }
-                    const prevData = loadStorageData(prevM, prevY);
-
                     if (Array.isArray(resData)) {
                         if (resData.length <= 1) {
-                            if (prevData && prevData.rooms.length > 0) {
-                                // TỰ ĐỘNG CHỐT SỔ KHÔNG CẦN BẢNG HỎI
+                            // TỰ ĐỘNG CHỐT SỔ TỪ THÁNG TRƯỚC BẰNG SERVER KHÔNG CẦN LOCAL STORAGE
+                            setSyncStatus({ text: 'Đang chốt sổ...', color: 'text-yellow-400' });
+                            let prevM = month - 1; let prevY = year;
+                            if (prevM < 1) { prevM = 12; prevY -= 1; }
+                            
+                            const prevRes = await fetch(`${SCRIPT_URL}?month=${String(prevM).padStart(2, '0')}&year=${prevY}&t=${Date.now()}`);
+                            const prevResData = await prevRes.json();
+
+                            if (Array.isArray(prevResData) && prevResData.length > 1) {
+                                const pData = parseSheetData(prevResData, data.buildings || []);
                                 const newData = { 
-                                    buildings: prevData.buildings, 
-                                    rooms: prevData.rooms.map(r => {
+                                    buildings: pData.buildings, 
+                                    rooms: pData.rooms.map(r => {
                                         let currentCarried = Number(r.debt || 0);
                                         if (r.paymentStatus === 'debt' && r.subDebt > 0) currentCarried += Number(r.subDebt);
                                         if (r.paymentStatus === 'excess' && r.subDebt > 0) currentCarried -= Number(r.subDebt);
+                                        
                                         return { 
                                             ...r, 
                                             lastElec: r.currentElec !== null ? r.currentElec : r.lastElec, 
@@ -601,100 +683,20 @@
                                     }) 
                                 };
                                 setData(newData); saveStorageData(month, year, newData);
-                                setSyncStatus({ text: 'Tạo sổ mới...', color: 'text-yellow-400' });
-                                syncToSheets(newData, month, year);
+                                syncToSheets(newData, month, year); // Upload sổ mới chốt
+                                return true;
                             } else {
-                                wipeInitialData(); setSyncStatus({ text: 'Sổ mới trống', color: 'text-gray-400' });
+                                wipeInitialData();
+                                setSyncStatus({ text: 'Sổ mới trống', color: 'text-gray-400' });
+                                return true;
                             }
-                            return true;
                         }
 
-                        let newBuildings = []; let newRooms = [];
-                        let currentBuildingName = ""; let sheetNeedsCorrection = false;
-                        
-                        const header = resData[0];
-                        const colIdx = {
-                            dienCu: header.indexOf("Điện Cũ") >= 0 ? header.indexOf("Điện Cũ") : 3, 
-                            dienMoi: header.indexOf("Điện Mới") >= 0 ? header.indexOf("Điện Mới") : 4,
-                            nuocCu: header.indexOf("Nước Cũ") >= 0 ? header.indexOf("Nước Cũ") : 5,
-                            nuocMoi: header.indexOf("Nước Mới") >= 0 ? header.indexOf("Nước Mới") : 6,
-                            tienPhong: header.indexOf("Tiền Phòng") >= 0 ? header.indexOf("Tiền Phòng") : 7,
-                            debt: header.indexOf("Nợ/Dư Kỳ Trước") >= 0 ? header.indexOf("Nợ/Dư Kỳ Trước") : 9,
-                            daThanhToan: header.indexOf("Đã Thanh Toán") >= 0 ? header.indexOf("Đã Thanh Toán") : 10,
-                            tongTien: header.indexOf("Tổng Hóa Đơn") >= 0 ? header.indexOf("Tổng Hóa Đơn") : 11
-                        };
-
-                        for (let i = 1; i < resData.length; i++) {
-                            const row = resData[i];
-                            if (!row[1] && !row[2] && !currentBuildingName) continue; 
-
-                            const buildingName = row[1] ? String(row[1]).trim() : currentBuildingName;
-                            if (row[1]) currentBuildingName = buildingName;
-                            
-                            const roomNameRaw = String(row[2]).replace('Phòng ', '').trim();
-                            let lastElec = Number(row[colIdx.dienCu] || 0); 
-                            const currentElec = row[colIdx.dienMoi] === "" ? null : Number(row[colIdx.dienMoi]);
-                            let lastWater = Number(row[colIdx.nuocCu] || 0); 
-                            const currentWater = row[colIdx.nuocMoi] === "" ? null : Number(row[colIdx.nuocMoi]);
-                            const price = Number(row[colIdx.tienPhong] || 0); 
-                            let debt = Number(row[colIdx.debt] || 0);
-                            
-                            // KẾ TOÁN NỘI SUY: BẢO TOÀN DỮ LIỆU & TỰ ĐỘNG SỬA NỢ
-                            if (prevData) {
-                                const pRoom = prevData.rooms.find(r => r.name === roomNameRaw && r.buildingId === (newBuildings.find(b => b.name === buildingName)?.id || prevData.buildings.find(b => b.name === buildingName)?.id));
-                                if (pRoom) {
-                                    const expectedLastE = pRoom.currentElec !== null ? pRoom.currentElec : pRoom.lastElec;
-                                    const expectedLastW = pRoom.currentWater !== null ? pRoom.currentWater : pRoom.lastWater;
-                                    let expectedDebt = Number(pRoom.debt || 0);
-                                    if (pRoom.paymentStatus === 'debt') expectedDebt += Number(pRoom.subDebt || 0);
-                                    if (pRoom.paymentStatus === 'excess') expectedDebt -= Number(pRoom.subDebt || 0);
-
-                                    if (lastElec !== expectedLastE) { lastElec = expectedLastE; sheetNeedsCorrection = true; }
-                                    if (lastWater !== expectedLastW) { lastWater = expectedLastW; sheetNeedsCorrection = true; }
-                                    if (debt !== expectedDebt) { debt = expectedDebt; sheetNeedsCorrection = true; }
-                                }
-                            }
-
-                            const daThanhToanSheet = row[colIdx.daThanhToan];
-                            const tongTienSheet = Number(row[colIdx.tongTien] || 0);
-
-                            let b = newBuildings.find(b => b.name === buildingName);
-                            if (!b) { 
-                                const oldB = data.buildings.find(ob => ob.name === buildingName);
-                                b = { id: oldB ? oldB.id : 'b_' + Date.now() + i, name: buildingName, rates: oldB ? oldB.rates : { elec: 3500, water: 14000, service: 50000 } }; 
-                                newBuildings.push(b); 
-                            }
-
-                            const usedE = Math.max(0, (currentElec !== null ? currentElec : lastElec) - lastElec);
-                            const usedW = Math.max(0, (currentWater !== null ? currentWater : lastWater) - lastWater);
-                            const expectedTotal = price + (usedE * b.rates.elec) + (usedW * b.rates.water) + b.rates.service + debt;
-                            
-                            if (expectedTotal !== tongTienSheet) sheetNeedsCorrection = true;
-                            
-                            let computedStatus = 'none'; let computedSubDebt = 0;
-                            if (daThanhToanSheet !== "" && daThanhToanSheet !== null && daThanhToanSheet !== undefined) {
-                                const paidNum = Number(daThanhToanSheet);
-                                if (paidNum === expectedTotal && expectedTotal > 0) { computedStatus = 'paid'; } 
-                                else if (paidNum < expectedTotal) { computedStatus = 'debt'; computedSubDebt = expectedTotal - paidNum; } 
-                                else if (paidNum > expectedTotal) { computedStatus = 'excess'; computedSubDebt = paidNum - expectedTotal; } 
-                                else if (paidNum === 0 && expectedTotal > 0) { computedStatus = 'none'; }
-                            }
-
-                            const oldR = data.rooms.find(or => or.name === roomNameRaw);
-                            const roomId = oldR ? oldR.id : 'r_' + Date.now() + i;
-                            newRooms.push({ id: roomId, buildingId: b.id, name: roomNameRaw, price, debt, lastElec, currentElec, lastWater, currentWater, paymentStatus: computedStatus, subDebt: computedSubDebt });
-                        }
-                        
-                        const parsedData = { buildings: newBuildings, rooms: newRooms };
+                        // TẢI TRỰC TIẾP DỮ LIỆU TỪ SHEETS (KHÔNG GHI ĐÈ, KHÔNG TỰ ĐỘNG LƯU NGƯỢC)
+                        const parsedData = parseSheetData(resData, data.buildings || []);
                         setData(parsedData); saveStorageData(month, year, parsedData);
-                        
-                        if (sheetNeedsCorrection) {
-                            setSyncStatus({ text: 'Đang sửa lỗi Sheet...', color: 'text-yellow-400' });
-                            syncToSheets(parsedData, month, year);
-                        } else {
-                            setSyncStatus({ text: 'Dữ liệu mới nhất', color: 'text-green-400' });
-                            setTimeout(() => setSyncStatus({ text: '', color: '' }), 2500);
-                        }
+                        setSyncStatus({ text: 'Dữ liệu mới nhất', color: 'text-green-400' });
+                        setTimeout(() => setSyncStatus({ text: '', color: '' }), 2500);
                         return true;
                     }
                 } catch (e) { setSyncStatus({ text: 'Lỗi tải Sheet', color: 'text-red-400' }); }
@@ -708,8 +710,6 @@
                 document.addEventListener('visibilitychange', handleVisibilityChange);
                 return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
             }, [currentMonth, currentYear]);
-
-            useEffect(() => { if (data.buildings.length > 0 && !data.buildings.find(b => b.id === selectedBuilding)) setSelectedBuilding(data.buildings[0]?.id || ''); }, [data.buildings, selectedBuilding]);
 
             const handlePrevMonth = () => { 
                 let m = currentMonth - 1; let y = currentYear;
