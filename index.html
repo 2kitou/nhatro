@@ -65,7 +65,6 @@
             return Number(room.price) + (usedElec * rates.elec) + (usedWater * rates.water) + Number(rates.service) + carriedDebt;
         };
 
-        // GIAO DIỆN HÓA ĐƠN MỚI: CHỐNG CẮT XÉN THUMBNAIL
         const ReceiptTemplate = ({ room, month, year, rates }) => {
             if(!room || !rates) return null;
             const newElec = room.currentElec !== null ? room.currentElec : room.lastElec; 
@@ -77,11 +76,8 @@
 
             return (
                 <div className="w-[420px] bg-white p-7 relative overflow-hidden" style={{ fontFamily: "'Inter', sans-serif" }}>
-                    {/* WATERMARK KHỔNG LỒ NGAY TÂM HÓA ĐƠN (Luôn hiển thị ở Thumbnail) */}
                     <div className="absolute inset-0 flex items-center justify-center z-0 pointer-events-none select-none overflow-hidden">
-                        <span className="text-[220px] font-black text-gray-900 opacity-[0.03] rotate-[-10deg] tracking-tighter whitespace-nowrap">
-                            P.{room.name}
-                        </span>
+                        <span className="text-[220px] font-black text-gray-900 opacity-[0.03] rotate-[-10deg] tracking-tighter whitespace-nowrap">P.{room.name}</span>
                     </div>
 
                     <div className="absolute top-0 right-0 bg-blue-600 text-white px-5 py-3 rounded-bl-[2rem] shadow-md border-b-[3px] border-l-[3px] border-blue-800 z-10 flex flex-col items-center justify-center">
@@ -89,7 +85,6 @@
                         <span className="text-4xl font-black leading-none">{room.name}</span>
                     </div>
                     
-                    {/* THÊM TÊN PHÒNG VÀO TIÊU ĐỀ CHÍNH */}
                     <div className="text-left mb-8 border-b-2 border-dashed border-gray-200 pb-5 pt-2 relative z-10">
                         <h1 className="text-[28px] font-black text-gray-900 tracking-tight">HÓA ĐƠN <span className="text-blue-600">P.{room.name}</span></h1>
                         <p className="text-gray-500 text-base mt-1 font-medium">Tháng {month}/{year}</p>
@@ -99,10 +94,7 @@
                         <div className="flex justify-between items-center"><span className="text-gray-600 font-medium">1. Tiền phòng</span><span className="font-bold text-gray-900 text-[17px]">{Number(room.price).toLocaleString('vi-VN')}đ</span></div>
                         
                         <div className="border-t border-gray-100 pt-3">
-                            <div className="flex justify-between items-center mb-1">
-                                <span className="text-gray-600 font-medium">2. Tiền điện</span>
-                                <span className="font-bold text-gray-900 text-[17px]">{tD.toLocaleString('vi-VN')}đ</span>
-                            </div>
+                            <div className="flex justify-between items-center mb-1"><span className="text-gray-600 font-medium">2. Tiền điện</span><span className="font-bold text-gray-900 text-[17px]">{tD.toLocaleString('vi-VN')}đ</span></div>
                             <div className="flex justify-between items-center text-[13px] text-gray-500">
                                 <span>S.cũ: <strong className="text-gray-700">{room.lastElec}</strong> ➔ S.mới: <strong className="text-gray-700">{newElec}</strong></span>
                                 <span>({uE} ký x {rates.elec.toLocaleString('vi-VN')}đ)</span>
@@ -110,10 +102,7 @@
                         </div>
 
                         <div className="border-t border-gray-100 pt-3">
-                            <div className="flex justify-between items-center mb-1">
-                                <span className="text-gray-600 font-medium">3. Tiền nước</span>
-                                <span className="font-bold text-gray-900 text-[17px]">{tN.toLocaleString('vi-VN')}đ</span>
-                            </div>
+                            <div className="flex justify-between items-center mb-1"><span className="text-gray-600 font-medium">3. Tiền nước</span><span className="font-bold text-gray-900 text-[17px]">{tN.toLocaleString('vi-VN')}đ</span></div>
                             <div className="flex justify-between items-center text-[13px] text-gray-500">
                                 <span>S.cũ: <strong className="text-gray-700">{room.lastWater}</strong> ➔ S.mới: <strong className="text-gray-700">{newWater}</strong></span>
                                 <span>({uW} khối x {rates.water.toLocaleString('vi-VN')}đ)</span>
@@ -252,56 +241,41 @@
             };
 
             const handleDownloadSingle = () => {
-                const link = document.createElement('a');
-                link.href = receiptImgUrl;
-                link.download = `HoaDon_P${receiptRoom.name}_Thang${currentMonth}.png`;
-                link.click();
-                setToastMsg('Đã tải ảnh về máy!');
-                setTimeout(() => setToastMsg(''), 2500);
+                const link = document.createElement('a'); link.href = receiptImgUrl; link.download = `HoaDon_P${receiptRoom.name}_Thang${currentMonth}.png`; link.click();
+                setToastMsg('Đã tải ảnh về máy!'); setTimeout(() => setToastMsg(''), 2500);
             };
 
             const handleShareNative = async () => {
                 try {
-                    const response = await fetch(receiptImgUrl);
-                    const blob = await response.blob();
+                    const response = await fetch(receiptImgUrl); const blob = await response.blob();
                     const file = new File([blob], `HoaDon_P${receiptRoom.name}.png`, { type: 'image/png' });
                     if (navigator.canShare && navigator.canShare({ files: [file] })) {
                         await navigator.share({ files: [file], title: `Hóa Đơn P.${receiptRoom.name}` });
-                    } else {
-                        setToastMsg('Trình duyệt không hỗ trợ!');
-                        setTimeout(() => setToastMsg(''), 2500);
-                    }
+                    } else { setToastMsg('Trình duyệt không hỗ trợ!'); setTimeout(() => setToastMsg(''), 2500); }
                 } catch (err) {}
             };
 
             const handleBatchShareClick = async () => {
                 const readyRooms = filteredRooms.filter(r => r.currentElec !== null && r.currentWater !== null);
-                if(readyRooms.length === 0) {
-                    setToastMsg("Chưa có phòng nào chốt số!");
-                    setTimeout(() => setToastMsg(''), 2500); return;
-                }
+                if(readyRooms.length === 0) { setToastMsg("Chưa có phòng nào chốt số!"); setTimeout(() => setToastMsg(''), 2500); return; }
 
                 setBatchState({ isOpen: true, isGenerating: true, progress: 0, files: null });
-                
                 try {
                     let filesArray = [];
                     for (let i = 0; i < readyRooms.length; i++) {
-                        let r = readyRooms[i];
-                        const el = document.getElementById(`receipt-batch-${r.id}`);
+                        let r = readyRooms[i]; const el = document.getElementById(`receipt-batch-${r.id}`);
                         if (el) {
                             const canvas = await html2canvas(el, { scale: 2, backgroundColor: '#ffffff' });
                             const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
                             const file = new File([blob], `HoaDon_P${r.name}_Thang${currentMonth}.png`, { type: 'image/png' });
                             filesArray.push(file);
                         }
-                        setBatchState(prev => ({ ...prev, progress: i + 1 }));
-                        await new Promise(res => setTimeout(res, 50)); 
+                        setBatchState(prev => ({ ...prev, progress: i + 1 })); await new Promise(res => setTimeout(res, 50)); 
                     }
                     setBatchState(prev => ({ ...prev, isGenerating: false, files: filesArray }));
                 } catch(e) { 
                     setBatchState({ isOpen: false, isGenerating: false, progress: 0, files: null });
-                    setToastMsg("Lỗi hệ thống: " + e.message); 
-                    setTimeout(() => setToastMsg(''), 3000);
+                    setToastMsg("Lỗi hệ thống!"); setTimeout(() => setToastMsg(''), 3000);
                 }
             };
 
@@ -314,12 +288,8 @@
                         const JSZip = window.JSZip; const zip = new JSZip();
                         batchState.files.forEach(f => zip.file(f.name, f));
                         const content = await zip.generateAsync({type: "blob"});
-                        const link = document.createElement('a');
-                        link.href = URL.createObjectURL(content);
-                        link.download = `TatCa_HoaDon_Thang_${currentMonth}_${currentYear}.zip`;
-                        link.click();
-                        setToastMsg('Đã nén toàn bộ thành File ZIP!');
-                        setTimeout(() => setToastMsg(''), 3000);
+                        const link = document.createElement('a'); link.href = URL.createObjectURL(content); link.download = `TatCa_HoaDon_Thang_${currentMonth}_${currentYear}.zip`; link.click();
+                        setToastMsg('Đã nén toàn bộ thành File ZIP!'); setTimeout(() => setToastMsg(''), 3000);
                     }
                 } catch(e) {}
                 setBatchState({ isOpen: false, isGenerating: false, progress: 0, files: null });
@@ -353,11 +323,7 @@
                     <div className="flex-1 overflow-y-auto p-4 pb-20">
                         <div className="bg-gray-50 p-4 rounded-2xl border border-gray-200 mb-4 text-center">
                             <span className="text-xs font-semibold text-gray-400 tracking-wider uppercase">ĐÃ THU / TỔNG THU</span>
-                            <div className="text-2xl font-bold text-gray-900 mt-1">
-                                <span className="text-gray-900">{collectedRevenue.toLocaleString('vi-VN')}đ</span> 
-                                <span className="text-gray-300 font-light mx-2">/</span> 
-                                <span className="text-gray-400 font-medium">{totalRevenue.toLocaleString('vi-VN')}đ</span>
-                            </div>
+                            <div className="text-2xl font-bold text-gray-900 mt-1"><span className="text-gray-900">{collectedRevenue.toLocaleString('vi-VN')}đ</span> <span className="text-gray-300 font-light mx-2">/</span> <span className="text-gray-400 font-medium">{totalRevenue.toLocaleString('vi-VN')}đ</span></div>
                         </div>
 
                         <div className="mb-4">
@@ -413,24 +379,16 @@
                                         <Icon name="loader" className="w-10 h-10 animate-spin text-blue-600 mb-4" />
                                         <h3 className="font-bold text-lg text-gray-900 mb-2">Đang tạo ảnh hàng loạt...</h3>
                                         <p className="text-gray-500 font-medium text-sm mb-1">Vui lòng không đóng ứng dụng</p>
-                                        <div className="w-full bg-gray-200 rounded-full h-2.5 mt-4">
-                                            <div className="bg-blue-600 h-2.5 rounded-full transition-all duration-300" style={{ width: `${(batchState.progress / filteredRooms.filter(r => r.currentElec !== null && r.currentWater !== null).length) * 100}%` }}></div>
-                                        </div>
+                                        <div className="w-full bg-gray-200 rounded-full h-2.5 mt-4"><div className="bg-blue-600 h-2.5 rounded-full transition-all duration-300" style={{ width: `${(batchState.progress / filteredRooms.filter(r => r.currentElec !== null && r.currentWater !== null).length) * 100}%` }}></div></div>
                                         <p className="text-sm text-blue-600 mt-2 font-bold">{batchState.progress} / {filteredRooms.filter(r => r.currentElec !== null && r.currentWater !== null).length} phòng</p>
                                     </>
                                 ) : (
                                     <div className="fade-in w-full flex flex-col items-center">
-                                        <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
-                                            <Icon name="check" className="w-8 h-8 text-green-600" />
-                                        </div>
+                                        <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4"><Icon name="check" className="w-8 h-8 text-green-600" /></div>
                                         <h3 className="font-bold text-xl text-gray-900 mb-2">Đã vẽ xong {batchState.files?.length} ảnh!</h3>
                                         <p className="text-gray-500 text-sm mb-6">Bấm nút bên dưới để lưu toàn bộ ảnh vào điện thoại (Hoặc tải file ZIP).</p>
-                                        <button onClick={handleConfirmBatchShare} className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl shadow-md flex items-center justify-center gap-2 mb-3 transition-all">
-                                            <Icon name="share" className="w-5 h-5" /> CHIA SẺ & LƯU ẢNH
-                                        </button>
-                                        <button onClick={() => setBatchState({ isOpen: false, isGenerating: false, progress: 0, files: null })} className="w-full py-3 bg-gray-100 text-gray-600 font-bold rounded-xl hover:bg-gray-200 transition-all">
-                                            Hủy bỏ
-                                        </button>
+                                        <button onClick={handleConfirmBatchShare} className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl shadow-md flex items-center justify-center gap-2 mb-3 transition-all"><Icon name="share" className="w-5 h-5" /> CHIA SẺ & LƯU ẢNH</button>
+                                        <button onClick={() => setBatchState({ isOpen: false, isGenerating: false, progress: 0, files: null })} className="w-full py-3 bg-gray-100 text-gray-600 font-bold rounded-xl hover:bg-gray-200 transition-all">Hủy bỏ</button>
                                     </div>
                                 )}
                             </div>
@@ -440,35 +398,23 @@
                     {receiptRoom && (
                         <div className="fixed inset-0 bg-black/80 z-[9999] flex flex-col items-center justify-center p-4 fade-in backdrop-blur-sm">
                             <div className="bg-white w-full max-w-[420px] max-h-[95vh] rounded-3xl overflow-hidden shadow-2xl flex flex-col">
-                                <div className="flex justify-between items-center p-4 border-b border-gray-100 bg-white flex-shrink-0">
-                                    <h3 className="font-bold text-base text-gray-900">Chi tiết Hóa đơn</h3>
-                                    <button onClick={() => setReceiptRoom(null)} className="p-2 bg-gray-100 text-gray-600 rounded-full hover:bg-gray-200"><Icon name="x" className="w-4 h-4" /></button>
-                                </div>
-                                
+                                <div className="flex justify-between items-center p-4 border-b border-gray-100 bg-white flex-shrink-0"><h3 className="font-bold text-base text-gray-900">Chi tiết Hóa đơn</h3><button onClick={() => setReceiptRoom(null)} className="p-2 bg-gray-100 text-gray-600 rounded-full hover:bg-gray-200"><Icon name="x" className="w-4 h-4" /></button></div>
                                 <div className="p-4 flex-1 min-h-0 bg-gray-100 overflow-y-auto flex flex-col items-center justify-start relative">
                                     {isGenerating ? (
                                         <div className="flex flex-col items-center justify-center h-full text-gray-500 py-10"><Icon name="loader" className="w-8 h-8 animate-spin mb-3 text-blue-500" /><p className="text-sm font-medium">Đang tạo ảnh...</p></div>
                                     ) : ( 
                                         receiptImgUrl && (
                                             <div className="w-full flex flex-col items-center">
-                                                <div className="bg-blue-100 border border-blue-200 text-blue-800 text-xs font-semibold px-4 py-2.5 rounded-xl mb-4 w-full text-center flex items-center justify-center gap-2 shadow-sm">
-                                                    <Icon name="smartphone" className="w-4 h-4" />
-                                                    Mẹo ĐT: Chạm giữ ảnh để "Lưu vào Ảnh"
-                                                </div>
+                                                <div className="bg-blue-100 border border-blue-200 text-blue-800 text-xs font-semibold px-4 py-2.5 rounded-xl mb-4 w-full text-center flex items-center justify-center gap-2 shadow-sm"><Icon name="smartphone" className="w-4 h-4" /> Mẹo ĐT: Chạm giữ ảnh để "Lưu vào Ảnh"</div>
                                                 <img src={receiptImgUrl} className="w-full h-auto shadow-md rounded-2xl block border border-gray-200" alt="Hóa đơn" />
                                             </div>
                                         ) 
                                     )}
                                 </div>
-
                                 <div className="p-4 bg-white flex flex-col gap-2.5 flex-shrink-0 border-t border-gray-100">
                                     <div className="flex gap-2">
-                                        <button onClick={handleDownloadSingle} disabled={isGenerating} className="flex-1 py-3.5 bg-gray-900 hover:bg-black text-white font-bold text-xs rounded-xl shadow-sm flex justify-center items-center gap-2 transition-all">
-                                            <Icon name="download" className="w-4 h-4" /> Tải về máy
-                                        </button>
-                                        <button onClick={handleShareNative} disabled={isGenerating} className="flex-1 py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-sm flex justify-center items-center gap-2 transition-all">
-                                            <Icon name="share" className="w-4 h-4" /> Chia sẻ
-                                        </button>
+                                        <button onClick={handleDownloadSingle} disabled={isGenerating} className="flex-1 py-3.5 bg-gray-900 hover:bg-black text-white font-bold text-xs rounded-xl shadow-sm flex justify-center items-center gap-2 transition-all"><Icon name="download" className="w-4 h-4" /> Tải về máy</button>
+                                        <button onClick={handleShareNative} disabled={isGenerating} className="flex-1 py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-sm flex justify-center items-center gap-2 transition-all"><Icon name="share" className="w-4 h-4" /> Chia sẻ hệ thống</button>
                                     </div>
                                 </div>
                             </div>
@@ -600,7 +546,6 @@
             const [data, setData] = useState(() => { const saved = loadStorageData(currentMonth, currentYear); return saved ? saved : INITIAL_DATA; });
             const [activeTab, setActiveTab] = useState('ghi_so');
             const [selectedBuilding, setSelectedBuilding] = useState(data.buildings[0]?.id || '');
-            const [showConfirmNewMonth, setShowConfirmNewMonth] = useState(false);
             const [syncStatus, setSyncStatus] = useState({ text: 'Đang kết nối...', color: 'text-blue-400' });
             
             const syncTimeout = useRef(null);
@@ -633,10 +578,34 @@
                     const res = await fetch(`${SCRIPT_URL}?month=${month}&year=${year}&t=${Date.now()}`);
                     const resData = await res.json();
                     
+                    let prevM = month - 1; let prevY = year;
+                    if (prevM < 1) { prevM = 12; prevY -= 1; }
+                    const prevData = loadStorageData(prevM, prevY);
+
                     if (Array.isArray(resData)) {
                         if (resData.length <= 1) {
-                            wipeInitialData();
-                            setSyncStatus({ text: 'Sổ mới trống', color: 'text-gray-400' });
+                            if (prevData && prevData.rooms.length > 0) {
+                                // TỰ ĐỘNG CHỐT SỔ KHÔNG CẦN BẢNG HỎI
+                                const newData = { 
+                                    buildings: prevData.buildings, 
+                                    rooms: prevData.rooms.map(r => {
+                                        let currentCarried = Number(r.debt || 0);
+                                        if (r.paymentStatus === 'debt' && r.subDebt > 0) currentCarried += Number(r.subDebt);
+                                        if (r.paymentStatus === 'excess' && r.subDebt > 0) currentCarried -= Number(r.subDebt);
+                                        return { 
+                                            ...r, 
+                                            lastElec: r.currentElec !== null ? r.currentElec : r.lastElec, 
+                                            lastWater: r.currentWater !== null ? r.currentWater : r.lastWater, 
+                                            currentElec: null, currentWater: null, paymentStatus: 'none', subDebt: 0, debt: currentCarried 
+                                        };
+                                    }) 
+                                };
+                                setData(newData); saveStorageData(month, year, newData);
+                                setSyncStatus({ text: 'Tạo sổ mới...', color: 'text-yellow-400' });
+                                syncToSheets(newData, month, year);
+                            } else {
+                                wipeInitialData(); setSyncStatus({ text: 'Sổ mới trống', color: 'text-gray-400' });
+                            }
                             return true;
                         }
 
@@ -663,13 +632,29 @@
                             if (row[1]) currentBuildingName = buildingName;
                             
                             const roomNameRaw = String(row[2]).replace('Phòng ', '').trim();
-                            const lastElec = Number(row[colIdx.dienCu] || 0); 
+                            let lastElec = Number(row[colIdx.dienCu] || 0); 
                             const currentElec = row[colIdx.dienMoi] === "" ? null : Number(row[colIdx.dienMoi]);
-                            const lastWater = Number(row[colIdx.nuocCu] || 0); 
+                            let lastWater = Number(row[colIdx.nuocCu] || 0); 
                             const currentWater = row[colIdx.nuocMoi] === "" ? null : Number(row[colIdx.nuocMoi]);
                             const price = Number(row[colIdx.tienPhong] || 0); 
-                            const debt = Number(row[colIdx.debt] || 0);
+                            let debt = Number(row[colIdx.debt] || 0);
                             
+                            // KẾ TOÁN NỘI SUY: BẢO TOÀN DỮ LIỆU & TỰ ĐỘNG SỬA NỢ
+                            if (prevData) {
+                                const pRoom = prevData.rooms.find(r => r.name === roomNameRaw && r.buildingId === (newBuildings.find(b => b.name === buildingName)?.id || prevData.buildings.find(b => b.name === buildingName)?.id));
+                                if (pRoom) {
+                                    const expectedLastE = pRoom.currentElec !== null ? pRoom.currentElec : pRoom.lastElec;
+                                    const expectedLastW = pRoom.currentWater !== null ? pRoom.currentWater : pRoom.lastWater;
+                                    let expectedDebt = Number(pRoom.debt || 0);
+                                    if (pRoom.paymentStatus === 'debt') expectedDebt += Number(pRoom.subDebt || 0);
+                                    if (pRoom.paymentStatus === 'excess') expectedDebt -= Number(pRoom.subDebt || 0);
+
+                                    if (lastElec !== expectedLastE) { lastElec = expectedLastE; sheetNeedsCorrection = true; }
+                                    if (lastWater !== expectedLastW) { lastWater = expectedLastW; sheetNeedsCorrection = true; }
+                                    if (debt !== expectedDebt) { debt = expectedDebt; sheetNeedsCorrection = true; }
+                                }
+                            }
+
                             const daThanhToanSheet = row[colIdx.daThanhToan];
                             const tongTienSheet = Number(row[colIdx.tongTien] || 0);
 
@@ -726,53 +711,16 @@
 
             useEffect(() => { if (data.buildings.length > 0 && !data.buildings.find(b => b.id === selectedBuilding)) setSelectedBuilding(data.buildings[0]?.id || ''); }, [data.buildings, selectedBuilding]);
 
-            const handlePrevMonth = () => { if (currentMonth === 1) { setCurrentMonth(12); setCurrentYear(currentYear - 1); } else { setCurrentMonth(currentMonth - 1); } };
+            const handlePrevMonth = () => { 
+                let m = currentMonth - 1; let y = currentYear;
+                if (m < 1) { m = 12; y -= 1; }
+                setCurrentMonth(m); setCurrentYear(y); 
+            };
             
             const handleNextMonth = () => { 
-                let nextMonth = currentMonth + 1; let nextYear = currentYear;
-                if (nextMonth > 12) { nextMonth = 1; nextYear += 1; }
-                const nextDataStorage = loadStorageData(nextMonth, nextYear);
-                if (!nextDataStorage) { setShowConfirmNewMonth(true); } 
-                else { executeMonthTransition(nextMonth, nextYear, nextDataStorage); }
-            };
-
-            const confirmNextMonth = () => {
-                let nextMonth = currentMonth + 1; let nextYear = currentYear;
-                if (nextMonth > 12) { nextMonth = 1; nextYear += 1; }
-                executeMonthTransition(nextMonth, nextYear, null);
-                setShowConfirmNewMonth(false);
-            };
-
-            const executeMonthTransition = (nextMonth, nextYear, existingNextData) => {
-                const newData = { 
-                    ...data, 
-                    rooms: data.rooms.map(r => {
-                        let currentCarried = Number(r.debt || 0);
-                        if (r.paymentStatus === 'debt' && r.subDebt > 0) currentCarried += Number(r.subDebt);
-                        if (r.paymentStatus === 'excess' && r.subDebt > 0) currentCarried -= Number(r.subDebt);
-                        
-                        let existingRoom = existingNextData ? existingNextData.rooms.find(ex => ex.id === r.id || ex.name === r.name) : null;
-
-                        return { 
-                            ...r, 
-                            lastElec: r.currentElec !== null ? r.currentElec : r.lastElec, 
-                            lastWater: r.currentWater !== null ? r.currentWater : r.lastWater, 
-                            currentElec: existingRoom ? existingRoom.currentElec : null, 
-                            currentWater: existingRoom ? existingRoom.currentWater : null, 
-                            paymentStatus: existingRoom ? existingRoom.paymentStatus : 'none', 
-                            subDebt: existingRoom ? existingRoom.subDebt : 0, 
-                            debt: currentCarried 
-                        };
-                    }) 
-                };
-                skipFetchRef.current = true;
-                setCurrentMonth(nextMonth); setCurrentYear(nextYear); setData(newData); saveStorageData(nextMonth, nextYear, newData); 
-                
-                setSyncStatus({ text: 'Đang gộp sổ...', color: 'text-yellow-400' });
-                const payload = { ...newData, month: String(nextMonth).padStart(2, '0'), year: String(nextYear) };
-                fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
-                    .then(() => { setSyncStatus({ text: 'Đã gộp T.' + nextMonth, color: 'text-green-400' }); setTimeout(() => setSyncStatus({ text: '', color: '' }), 2500); })
-                    .catch(() => setSyncStatus({ text: 'Lỗi mạng', color: 'text-red-400' }));
+                let m = currentMonth + 1; let y = currentYear;
+                if (m > 12) { m = 1; y += 1; }
+                setCurrentMonth(m); setCurrentYear(y); 
             };
 
             return (
@@ -782,12 +730,6 @@
                         <div className="text-center"><h1 className="font-semibold text-sm tracking-wider">THÁNG {currentMonth} / {currentYear}</h1>{syncStatus.text && <p className={`text-[10px] font-medium mt-0.5 ${syncStatus.color}`}>{syncStatus.text}</p>}</div>
                         <button onClick={handleNextMonth} className="p-1.5 hover:bg-gray-800 rounded-lg"><Icon name="chevron-right" className="w-5 h-5" /></button>
                     </div>
-
-                    {showConfirmNewMonth && (
-                        <div className="fixed inset-0 bg-black/50 z-[9999] flex items-center justify-center p-4 backdrop-blur-sm">
-                            <div className="bg-white p-6 rounded-2xl max-w-sm w-full shadow-lg border border-gray-100"><h3 className="text-lg font-bold text-gray-900 mb-2">Chuyển sang tháng mới?</h3><p className="text-gray-500 text-sm mb-6 leading-relaxed">Hệ thống sẽ chuyển số Mới thành số Cũ và cộng dồn tiền Nợ/Dư sang kỳ tiếp theo.</p><div className="flex gap-2"><button onClick={() => setShowConfirmNewMonth(false)} className="flex-1 py-3 bg-gray-100 rounded-xl font-semibold text-sm text-gray-600">Hủy</button><button onClick={confirmNextMonth} className="flex-1 py-3 bg-gray-900 rounded-xl font-semibold text-sm text-white">Đồng ý</button></div></div>
-                        </div>
-                    )}
 
                     <div className="flex-1 min-h-0 relative">
                         {activeTab === 'ghi_so' && <TabGhiSo data={data} setData={setData} selectedBuilding={selectedBuilding} setSelectedBuilding={setSelectedBuilding} currentMonth={currentMonth} currentYear={currentYear} syncToSheets={syncToSheets} />}
