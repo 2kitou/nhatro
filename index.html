@@ -65,7 +65,7 @@
             return Number(room.price) + (usedElec * rates.elec) + (usedWater * rates.water) + Number(rates.service) + carriedDebt;
         };
 
-        // GIAO DIỆN HÓA ĐƠN ĐÃ CẬP NHẬT CHỈ SỐ CŨ / MỚI MINH BẠCH
+        // GIAO DIỆN HÓA ĐƠN MỚI: CHỐNG CẮT XÉN THUMBNAIL
         const ReceiptTemplate = ({ room, month, year, rates }) => {
             if(!room || !rates) return null;
             const newElec = room.currentElec !== null ? room.currentElec : room.lastElec; 
@@ -77,17 +77,25 @@
 
             return (
                 <div className="w-[420px] bg-white p-7 relative overflow-hidden" style={{ fontFamily: "'Inter', sans-serif" }}>
+                    {/* WATERMARK KHỔNG LỒ NGAY TÂM HÓA ĐƠN (Luôn hiển thị ở Thumbnail) */}
+                    <div className="absolute inset-0 flex items-center justify-center z-0 pointer-events-none select-none overflow-hidden">
+                        <span className="text-[220px] font-black text-gray-900 opacity-[0.03] rotate-[-10deg] tracking-tighter whitespace-nowrap">
+                            P.{room.name}
+                        </span>
+                    </div>
+
                     <div className="absolute top-0 right-0 bg-blue-600 text-white px-5 py-3 rounded-bl-[2rem] shadow-md border-b-[3px] border-l-[3px] border-blue-800 z-10 flex flex-col items-center justify-center">
                         <span className="text-[10px] uppercase font-bold tracking-widest opacity-80 mb-[-2px]">PHÒNG</span>
                         <span className="text-4xl font-black leading-none">{room.name}</span>
                     </div>
                     
-                    <div className="text-left mb-8 border-b-2 border-dashed border-gray-200 pb-5 pt-2">
-                        <h1 className="text-[28px] font-black text-gray-900 tracking-tight">HÓA ĐƠN</h1>
+                    {/* THÊM TÊN PHÒNG VÀO TIÊU ĐỀ CHÍNH */}
+                    <div className="text-left mb-8 border-b-2 border-dashed border-gray-200 pb-5 pt-2 relative z-10">
+                        <h1 className="text-[28px] font-black text-gray-900 tracking-tight">HÓA ĐƠN <span className="text-blue-600">P.{room.name}</span></h1>
                         <p className="text-gray-500 text-base mt-1 font-medium">Tháng {month}/{year}</p>
                     </div>
                     
-                    <div className="space-y-4 mb-8 text-base">
+                    <div className="space-y-4 mb-8 text-base relative z-10">
                         <div className="flex justify-between items-center"><span className="text-gray-600 font-medium">1. Tiền phòng</span><span className="font-bold text-gray-900 text-[17px]">{Number(room.price).toLocaleString('vi-VN')}đ</span></div>
                         
                         <div className="border-t border-gray-100 pt-3">
@@ -121,7 +129,7 @@
                         )}
                     </div>
                     
-                    <div className="mt-2 bg-gray-900 text-white p-5 rounded-2xl flex justify-between items-center shadow-lg border border-gray-800 relative overflow-hidden">
+                    <div className="mt-2 bg-gray-900 text-white p-5 rounded-2xl flex justify-between items-center shadow-lg border border-gray-800 relative overflow-hidden z-10">
                         <div className="absolute top-0 right-0 w-32 h-32 bg-white opacity-5 rounded-full -mr-10 -mt-10"></div>
                         <span className="text-sm font-bold text-gray-300 uppercase tracking-widest z-10">Tổng cần thu</span>
                         <span className="text-2xl font-black text-white z-10">{total.toLocaleString('vi-VN')} đ</span>
@@ -397,7 +405,6 @@
                         </div>
                     </div>
 
-                    {/* MODAL 1: TẢI TOÀN BỘ (CÓ PROGRESS BAR) */}
                     {batchState.isOpen && (
                         <div className="fixed inset-0 bg-black/80 z-[9999] flex flex-col items-center justify-center p-4 fade-in backdrop-blur-sm">
                             <div className="bg-white w-full max-w-[380px] rounded-3xl overflow-hidden shadow-2xl flex flex-col p-6 items-center text-center">
@@ -430,7 +437,6 @@
                         </div>
                     )}
 
-                    {/* MODAL 2: XEM HÓA ĐƠN ĐƠN LẺ */}
                     {receiptRoom && (
                         <div className="fixed inset-0 bg-black/80 z-[9999] flex flex-col items-center justify-center p-4 fade-in backdrop-blur-sm">
                             <div className="bg-white w-full max-w-[420px] max-h-[95vh] rounded-3xl overflow-hidden shadow-2xl flex flex-col">
@@ -469,7 +475,6 @@
                         </div>
                     )}
 
-                    {/* VÙNG CHỨA ẨN ĐỂ RENDER BILL */}
                     <div className="fixed top-[-9999px] left-[-9999px]">
                         <div ref={receiptRef}>
                             <ReceiptTemplate room={receiptRoom} month={currentMonth} year={currentYear} rates={currentRates} />
