@@ -135,7 +135,7 @@
             const tapeRef = useRef(null);
             const elecRef = useRef(null);
             const waterRef = useRef(null);
-            const filteredRooms = data.buildings ? data.rooms.filter(r => r.buildingId === selectedBuilding) : [];
+            const filteredRooms = data.rooms ? data.rooms.filter(r => r.buildingId === selectedBuilding) : [];
             const currentRoom = filteredRooms[currentIndex];
 
             useEffect(() => {
@@ -443,8 +443,20 @@
 
         const TabCaiDat = ({ data, setData, selectedBuilding, setSelectedBuilding, currentMonth, currentYear, syncToSheets }) => {
             const [bulkPrice, setBulkPrice] = useState('');
+            const [selectedRooms, setSelectedRooms] = useState([]);
+            const [addCount, setAddCount] = useState(1);
+            const [addStart, setAddStart] = useState(1);
+
             const currentBuilding = data.buildings && data.buildings.length > 0 ? data.buildings.find(b => b.id === selectedBuilding) : null;
             const filteredRooms = data.rooms ? data.rooms.filter(r => r.buildingId === selectedBuilding) : [];
+
+            const toggleRoom = (id) => {
+                setSelectedRooms(prev => prev.includes(id) ? prev.filter(rId => rId !== id) : [...prev, id]);
+            };
+            const toggleAll = () => {
+                if (selectedRooms.length === filteredRooms.length && filteredRooms.length > 0) setSelectedRooms([]);
+                else setSelectedRooms(filteredRooms.map(r => r.id));
+            };
 
             const handleRate = (field, val) => {
                 if(!currentBuilding) return;
@@ -474,22 +486,39 @@
                 const newData = { ...data, rooms: data.rooms.map(r => r.id === id ? { ...r, [field]: (field === 'price' || field === 'debt') ? (val === '' ? 0 : Number(val)) : val } : r) };
                 setData(newData); saveStorageData(currentMonth, currentYear, newData); syncToSheets(newData);
             };
-            const addRoom = () => {
-                if(!selectedBuilding) { alert("Vui lòng thêm Khu Vực trước!"); return; }
-                const newRooms = data.rooms ? [...data.rooms, { id: 'r_' + Date.now(), buildingId: selectedBuilding, name: 'Mới', price: 2000000, debt: 0, lastElec: 0, lastWater: 0, currentElec: null, currentWater: null, paymentStatus: 'none', subDebt: 0 }] : [{ id: 'r_' + Date.now(), buildingId: selectedBuilding, name: 'Mới', price: 2000000, debt: 0, lastElec: 0, lastWater: 0, currentElec: null, currentWater: null, paymentStatus: 'none', subDebt: 0 }];
-                const newData = { ...data, rooms: newRooms };
+
+            const handleBulkAdd = () => {
+                if(!selectedBuilding) return;
+                let newRooms = [];
+                let start = Number(addStart) || 1;
+                let count = Number(addCount) || 1;
+                for(let i=0; i<count; i++) {
+                    newRooms.push({
+                        id: 'r_' + Date.now() + i, 
+                        buildingId: selectedBuilding, 
+                        name: String(start + i), 
+                        price: 1500000, debt: 0, lastElec: 0, lastWater: 0, 
+                        currentElec: null, currentWater: null, paymentStatus: 'none', subDebt: 0
+                    });
+                }
+                const newData = { ...data, rooms: [...(data.rooms||[]), ...newRooms] };
                 setData(newData); saveStorageData(currentMonth, currentYear, newData); syncToSheets(newData);
+                setAddCount(1); setAddStart(start + count);
             };
+
             const deleteRoom = (id) => {
                 if(window.confirm("Xóa phòng này?")) {
                     const newData = { ...data, rooms: data.rooms.filter(r => r.id !== id) };
                     setData(newData); saveStorageData(currentMonth, currentYear, newData); syncToSheets(newData);
+                    setSelectedRooms(prev => prev.filter(rId => rId !== id));
                 }
             };
+
             const applyBulkPrice = () => {
-                if(!bulkPrice || isNaN(bulkPrice)) return;
-                const newData = { ...data, rooms: data.rooms.map(r => r.buildingId === selectedBuilding ? { ...r, price: Number(bulkPrice) } : r) };
-                setData(newData); saveStorageData(currentMonth, currentYear, newData); syncToSheets(newData); setBulkPrice(''); alert("Đã áp dụng giá mới!");
+                if(!bulkPrice || isNaN(bulkPrice) || selectedRooms.length === 0) return;
+                const newData = { ...data, rooms: data.rooms.map(r => selectedRooms.includes(r.id) ? { ...r, price: Number(bulkPrice) } : r) };
+                setData(newData); saveStorageData(currentMonth, currentYear, newData); syncToSheets(newData); 
+                setBulkPrice(''); setSelectedRooms([]); alert("Đã cập nhật giá hàng loạt!");
             };
 
             return (
@@ -521,25 +550,55 @@
                                     <div className="flex justify-between items-center"><span className="text-sm font-medium text-gray-600">Phí Dịch vụ</span><div className="relative w-1/2"><input type="number" value={currentBuilding.rates.service} onChange={e => handleRate('service', e.target.value)} className="w-full bg-gray-50 border border-gray-200 p-2.5 rounded-xl font-bold text-base text-right outline-none pr-6" /><span className="absolute right-2.5 top-2.5 text-gray-400 text-xs font-medium">đ</span></div></div>
                                 </div>
                             </div>
+                            
                             <div className="space-y-2">
-                                <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Danh Sách Phòng & Nợ/Dư Kỳ Trước</span>
-                                <div className="bg-gray-50 p-3 rounded-2xl border border-gray-200 flex gap-2"><input type="number" placeholder="Set đồng giá phòng..." value={bulkPrice} onChange={e => setBulkPrice(e.target.value)} className="flex-1 bg-white p-2.5 rounded-xl border border-gray-200 font-medium text-sm outline-none" /><button onClick={applyBulkPrice} className="bg-gray-900 text-white font-semibold text-xs px-4 rounded-xl">Áp dụng</button></div>
+                                <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Cập Nhật Phòng Nhanh</span>
+                                
+                                {/* BỘ CÔNG CỤ TỐI ƯU MỚI: THÊM NHANH VÀ ĐỔI GIÁ HÀNG LOẠT */}
+                                <div className="bg-gray-50 p-4 rounded-2xl border border-gray-200 space-y-4 mb-4">
+                                    <div>
+                                        <span className="text-[11px] font-bold text-gray-500 uppercase">1. Thêm N phòng cùng lúc</span>
+                                        <div className="flex gap-2 mt-1.5">
+                                            <input type="number" placeholder="Số lượng..." value={addCount} onChange={e=>setAddCount(e.target.value)} className="w-1/3 bg-white p-2.5 rounded-xl border border-gray-200 font-semibold text-sm outline-none" />
+                                            <input type="number" placeholder="Bắt đầu từ (VD: 101)..." value={addStart} onChange={e=>setAddStart(e.target.value)} className="flex-1 bg-white p-2.5 rounded-xl border border-gray-200 font-semibold text-sm outline-none" />
+                                            <button onClick={handleBulkAdd} className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm px-4 rounded-xl shadow-sm transition-all">+ Thêm</button>
+                                        </div>
+                                    </div>
+                                    <div className="border-t border-gray-200 pt-3">
+                                        <span className="text-[11px] font-bold text-gray-500 uppercase">2. Đổi giá cho {selectedRooms.length} phòng đã chọn</span>
+                                        <div className="flex gap-2 mt-1.5">
+                                            <input type="number" placeholder="Nhập giá mới..." value={bulkPrice} onChange={e => setBulkPrice(e.target.value)} className="flex-1 bg-white p-2.5 rounded-xl border border-gray-200 font-semibold text-sm outline-none" disabled={selectedRooms.length === 0} />
+                                            <button onClick={applyBulkPrice} disabled={selectedRooms.length === 0} className={`font-bold text-sm px-4 rounded-xl transition-all shadow-sm ${selectedRooms.length === 0 ? 'bg-gray-200 text-gray-400' : 'bg-gray-900 text-white hover:bg-black'}`}>Áp dụng</button>
+                                        </div>
+                                    </div>
+                                </div>
+
                                 <div className="bg-white rounded-2xl border border-gray-200 overflow-x-auto shadow-sm">
-                                    <table className="w-full text-left border-collapse min-w-[350px]">
-                                        <thead><tr className="bg-gray-50 text-gray-500 text-xs border-b border-gray-200"><th className="p-3 font-semibold w-20">Phòng</th><th className="p-3 font-semibold flex-1">Giá (đ)</th><th className="p-3 font-semibold w-28 text-amber-700">Nợ/Dư cũ</th><th className="p-3 font-semibold w-14 text-center">Xóa</th></tr></thead>
+                                    <table className="w-full text-left border-collapse min-w-[280px]">
+                                        <thead>
+                                            <tr className="bg-gray-50 text-gray-500 text-[11px] uppercase tracking-wide border-b border-gray-200">
+                                                <th className="p-3 w-12 text-center cursor-pointer" onClick={toggleAll}>
+                                                    <input type="checkbox" className="w-4 h-4 accent-gray-900" readOnly checked={selectedRooms.length === filteredRooms.length && filteredRooms.length > 0} />
+                                                </th>
+                                                <th className="p-3 font-bold w-20">Phòng</th>
+                                                <th className="p-3 font-bold flex-1">Giá Thuê (đ)</th>
+                                                <th className="p-3 font-bold w-12 text-center">Xóa</th>
+                                            </tr>
+                                        </thead>
                                         <tbody>
                                             {filteredRooms.map((room, index) => (
-                                                <tr key={room.id} className="border-b border-gray-100">
-                                                    <td className="p-2"><input value={room.name} onChange={e => handleRoomUpdate(room.id, 'name', e.target.value)} className="w-full bg-gray-50 p-2 rounded-lg font-bold text-sm text-center outline-none" /></td>
-                                                    <td className="p-2"><input type="number" value={room.price} onChange={e => handleRoomUpdate(room.id, 'price', e.target.value)} className="w-full bg-gray-50 border border-gray-200 p-2 rounded-lg font-medium outline-none text-xs" /></td>
-                                                    <td className="p-2"><input type="number" value={room.debt !== undefined ? room.debt : 0} onChange={e => handleRoomUpdate(room.id, 'debt', e.target.value)} className="w-full bg-amber-50 border border-amber-200 p-2 rounded-lg font-bold text-amber-800 outline-none text-xs" /></td>
-                                                    <td className="p-2 text-center"><button onClick={() => deleteRoom(room.id)} className="text-gray-400 hover:text-gray-700 p-1"><Icon name="trash-2" className="w-4 h-4" /></button></td>
+                                                <tr key={room.id} className={`border-b border-gray-100 transition-colors ${selectedRooms.includes(room.id) ? 'bg-blue-50/30' : ''}`}>
+                                                    <td className="p-2 text-center cursor-pointer" onClick={() => toggleRoom(room.id)}>
+                                                        <input type="checkbox" className="w-4 h-4 accent-gray-900 pointer-events-none" readOnly checked={selectedRooms.includes(room.id)} />
+                                                    </td>
+                                                    <td className="p-2"><input value={room.name} onChange={e => handleRoomUpdate(room.id, 'name', e.target.value)} className="w-full bg-gray-50 border border-gray-100 p-2.5 rounded-xl font-bold text-sm text-center outline-none focus:border-gray-300 transition-all" /></td>
+                                                    <td className="p-2"><input type="number" value={room.price} onChange={e => handleRoomUpdate(room.id, 'price', e.target.value)} className="w-full bg-gray-50 border border-gray-100 p-2.5 rounded-xl font-semibold outline-none text-xs focus:border-gray-300 transition-all" /></td>
+                                                    <td className="p-2 text-center"><button onClick={() => deleteRoom(room.id)} className="text-gray-400 hover:text-red-500 p-2 rounded-lg hover:bg-red-50 transition-all"><Icon name="trash-2" className="w-4 h-4" /></button></td>
                                                 </tr>
                                             ))}
                                         </tbody>
                                     </table>
-                                    {filteredRooms.length === 0 && <p className="text-center text-gray-400 text-sm py-6">Khu vực này chưa có phòng.</p>}
-                                    <button onClick={addRoom} className="w-full py-3.5 bg-gray-900 text-white font-semibold text-sm flex items-center justify-center gap-2"><Icon name="plus" className="w-4 h-4" /> Thêm Phòng Mới</button>
+                                    {filteredRooms.length === 0 && <p className="text-center text-gray-400 text-sm py-8 font-medium">Khu vực này chưa có phòng.</p>}
                                 </div>
                             </div>
                         </>
@@ -585,7 +644,10 @@
                     phiKhac: header.indexOf("Phí Khác") >= 0 ? header.indexOf("Phí Khác") : 8,
                     debt: header.indexOf("Nợ/Dư Kỳ Trước") >= 0 ? header.indexOf("Nợ/Dư Kỳ Trước") : 9,
                     daThanhToan: header.indexOf("Đã Thanh Toán") >= 0 ? header.indexOf("Đã Thanh Toán") : 10,
-                    tongTien: header.indexOf("Tổng Hóa Đơn") >= 0 ? header.indexOf("Tổng Hóa Đơn") : 11
+                    tongTien: header.indexOf("Tổng Hóa Đơn") >= 0 ? header.indexOf("Tổng Hóa Đơn") : 11,
+                    donGiaDien: header.indexOf("Đơn Giá Điện") >= 0 ? header.indexOf("Đơn Giá Điện") : 12,
+                    donGiaNuoc: header.indexOf("Đơn Giá Nước") >= 0 ? header.indexOf("Đơn Giá Nước") : 13,
+                    phiDichVu: header.indexOf("Phí Dịch Vụ") >= 0 ? header.indexOf("Phí Dịch Vụ") : 14
                 };
 
                 for (let i = 1; i < resData.length; i++) {
@@ -602,15 +664,19 @@
                     const currentWater = row[colIdx.nuocMoi] === "" || row[colIdx.nuocMoi] === undefined ? null : Number(row[colIdx.nuocMoi]);
                     const price = Number(row[colIdx.tienPhong] || 0); 
                     const debt = Number(row[colIdx.debt] || 0);
-                    const serviceFee = Number(row[colIdx.phiKhac] || 50000);
                     
                     const daThanhToanSheet = row[colIdx.daThanhToan];
                     const tongTienSheet = Number(row[colIdx.tongTien] || 0);
 
+                    // MẮT THẦN ĐỌC GIÁ ĐIỆN, NƯỚC, DỊCH VỤ TỪ GOOGLE SHEETS
+                    const elecRate = row[colIdx.donGiaDien] !== undefined && row[colIdx.donGiaDien] !== "" ? Number(row[colIdx.donGiaDien]) : 3500;
+                    const waterRate = row[colIdx.donGiaNuoc] !== undefined && row[colIdx.donGiaNuoc] !== "" ? Number(row[colIdx.donGiaNuoc]) : 14000;
+                    const serviceRate = row[colIdx.phiDichVu] !== undefined && row[colIdx.phiDichVu] !== "" ? Number(row[colIdx.phiDichVu]) : Number(row[colIdx.phiKhac] || 50000);
+
                     let b = newBuildings.find(b => b.name === buildingName);
                     if (!b) { 
                         const oldB = currentBuildingsList.find(ob => ob.name === buildingName);
-                        b = { id: oldB ? oldB.id : 'b_' + Date.now() + i, name: buildingName, rates: oldB ? { ...oldB.rates, service: serviceFee } : { elec: 3500, water: 14000, service: serviceFee } }; 
+                        b = { id: oldB ? oldB.id : 'b_' + Date.now() + i, name: buildingName, rates: { elec: elecRate, water: waterRate, service: serviceRate } }; 
                         newBuildings.push(b); 
                     }
 
@@ -627,7 +693,6 @@
                         else if (paidNum === 0 && expectedTotal > 0) { computedStatus = 'none'; }
                     }
 
-                    // Look for existing room in current loaded data to keep UI stable
                     const currentRoomsList = data && data.rooms ? data.rooms : [];
                     const oldR = currentRoomsList.find(or => or.name === roomNameRaw && or.buildingId === b.id);
                     const roomId = oldR ? oldR.id : 'r_' + Date.now() + i;
@@ -660,7 +725,6 @@
                     
                     if (Array.isArray(resData)) {
                         if (resData.length <= 1) {
-                            // TỰ ĐỘNG CHỐT SỔ TỪ THÁNG TRƯỚC BẰNG SERVER KHÔNG CẦN LOCAL STORAGE
                             setSyncStatus({ text: 'Đang chốt sổ...', color: 'text-yellow-400' });
                             let prevM = month - 1; let prevY = year;
                             if (prevM < 1) { prevM = 12; prevY -= 1; }
@@ -686,7 +750,7 @@
                                     }) 
                                 };
                                 setData(newData); saveStorageData(month, year, newData);
-                                syncToSheets(newData, month, year); // Upload sổ mới chốt
+                                syncToSheets(newData, month, year); 
                                 return true;
                             } else {
                                 wipeInitialData();
@@ -695,7 +759,6 @@
                             }
                         }
 
-                        // TẢI TRỰC TIẾP DỮ LIỆU TỪ SHEETS (KHÔNG GHI ĐÈ, KHÔNG TỰ ĐỘNG LƯU NGƯỢC)
                         const parsedData = parseSheetData(resData, data.buildings || []);
                         setData(parsedData); saveStorageData(month, year, parsedData);
                         setSyncStatus({ text: 'Dữ liệu mới nhất', color: 'text-green-400' });
