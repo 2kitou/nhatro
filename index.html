@@ -554,7 +554,6 @@
                             <div className="space-y-2">
                                 <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Cập Nhật Phòng Nhanh</span>
                                 
-                                {/* BỘ CÔNG CỤ TỐI ƯU MỚI: THÊM NHANH VÀ ĐỔI GIÁ HÀNG LOẠT */}
                                 <div className="bg-gray-50 p-4 rounded-2xl border border-gray-200 space-y-4 mb-4">
                                     <div>
                                         <span className="text-[11px] font-bold text-gray-500 uppercase">1. Thêm N phòng cùng lúc</span>
@@ -667,7 +666,6 @@
                     const daThanhToanSheet = row[colIdx.daThanhToan];
                     const tongTienSheet = Number(row[colIdx.tongTien] || 0);
 
-                    // MẮT THẦN ĐỌC GIÁ ĐIỆN, NƯỚC, DỊCH VỤ TỪ GOOGLE SHEETS
                     const elecRate = row[colIdx.donGiaDien] !== undefined && row[colIdx.donGiaDien] !== "" ? Number(row[colIdx.donGiaDien]) : 3500;
                     const waterRate = row[colIdx.donGiaNuoc] !== undefined && row[colIdx.donGiaNuoc] !== "" ? Number(row[colIdx.donGiaNuoc]) : 14000;
                     const serviceRate = row[colIdx.phiKhac] !== undefined && row[colIdx.phiKhac] !== "" ? Number(row[colIdx.phiKhac]) : 50000;
@@ -722,48 +720,47 @@
                     const res = await fetch(`${SCRIPT_URL}?month=${String(month).padStart(2, '0')}&year=${year}&t=${Date.now()}`);
                     const resData = await res.json();
                     
-                    if (Array.isArray(resData)) {
-                        if (resData.length <= 1) {
-                            setSyncStatus({ text: 'Đang chốt sổ...', color: 'text-yellow-400' });
-                            let prevM = month - 1; let prevY = year;
-                            if (prevM < 1) { prevM = 12; prevY -= 1; }
-                            
-                            const prevRes = await fetch(`${SCRIPT_URL}?month=${String(prevM).padStart(2, '0')}&year=${prevY}&t=${Date.now()}`);
-                            const prevResData = await prevRes.json();
+                    // SỬA LỖI TẠI ĐÂY: NHẬN DIỆN "LỖI SHEET NOT FOUND" ĐỂ CHỐT SỔ MỚI
+                    if (resData.error || !Array.isArray(resData) || resData.length <= 1) {
+                        setSyncStatus({ text: 'Đang chốt sổ...', color: 'text-yellow-400' });
+                        let prevM = month - 1; let prevY = year;
+                        if (prevM < 1) { prevM = 12; prevY -= 1; }
+                        
+                        const prevRes = await fetch(`${SCRIPT_URL}?month=${String(prevM).padStart(2, '0')}&year=${prevY}&t=${Date.now()}`);
+                        const prevResData = await prevRes.json();
 
-                            if (Array.isArray(prevResData) && prevResData.length > 1) {
-                                const pData = parseSheetData(prevResData, data.buildings || []);
-                                const newData = { 
-                                    buildings: pData.buildings, 
-                                    rooms: pData.rooms.map(r => {
-                                        let currentCarried = Number(r.debt || 0);
-                                        if (r.paymentStatus === 'debt' && r.subDebt > 0) currentCarried += Number(r.subDebt);
-                                        if (r.paymentStatus === 'excess' && r.subDebt > 0) currentCarried -= Number(r.subDebt);
-                                        
-                                        return { 
-                                            ...r, 
-                                            lastElec: r.currentElec !== null ? r.currentElec : r.lastElec, 
-                                            lastWater: r.currentWater !== null ? r.currentWater : r.lastWater, 
-                                            currentElec: null, currentWater: null, paymentStatus: 'none', subDebt: 0, debt: currentCarried 
-                                        };
-                                    }) 
-                                };
-                                setData(newData); saveStorageData(month, year, newData);
-                                syncToSheets(newData, month, year); 
-                                return true;
-                            } else {
-                                wipeInitialData();
-                                setSyncStatus({ text: 'Sổ mới trống', color: 'text-gray-400' });
-                                return true;
-                            }
+                        if (Array.isArray(prevResData) && prevResData.length > 1) {
+                            const pData = parseSheetData(prevResData, data.buildings || []);
+                            const newData = { 
+                                buildings: pData.buildings, 
+                                rooms: pData.rooms.map(r => {
+                                    let currentCarried = Number(r.debt || 0);
+                                    if (r.paymentStatus === 'debt' && r.subDebt > 0) currentCarried += Number(r.subDebt);
+                                    if (r.paymentStatus === 'excess' && r.subDebt > 0) currentCarried -= Number(r.subDebt);
+                                    
+                                    return { 
+                                        ...r, 
+                                        lastElec: r.currentElec !== null ? r.currentElec : r.lastElec, 
+                                        lastWater: r.currentWater !== null ? r.currentWater : r.lastWater, 
+                                        currentElec: null, currentWater: null, paymentStatus: 'none', subDebt: 0, debt: currentCarried 
+                                    };
+                                }) 
+                            };
+                            setData(newData); saveStorageData(month, year, newData);
+                            syncToSheets(newData, month, year); 
+                            return true;
+                        } else {
+                            wipeInitialData();
+                            setSyncStatus({ text: 'Sổ mới trống', color: 'text-gray-400' });
+                            return true;
                         }
-
-                        const parsedData = parseSheetData(resData, data.buildings || []);
-                        setData(parsedData); saveStorageData(month, year, parsedData);
-                        setSyncStatus({ text: 'Dữ liệu mới nhất', color: 'text-green-400' });
-                        setTimeout(() => setSyncStatus({ text: '', color: '' }), 2500);
-                        return true;
                     }
+
+                    const parsedData = parseSheetData(resData, data.buildings || []);
+                    setData(parsedData); saveStorageData(month, year, parsedData);
+                    setSyncStatus({ text: 'Dữ liệu mới nhất', color: 'text-green-400' });
+                    setTimeout(() => setSyncStatus({ text: '', color: '' }), 2500);
+                    return true;
                 } catch (e) { setSyncStatus({ text: 'Lỗi tải Sheet', color: 'text-red-400' }); }
                 return false;
             };
@@ -776,15 +773,20 @@
                 return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
             }, [currentMonth, currentYear]);
 
+            // SỬA LỖI TẠI ĐÂY: XÓA SẠCH GIAO DIỆN (CHỚP MÀN HÌNH) ĐỂ TRÁNH NHÌN LỘN SỐ THÁNG CŨ
             const handlePrevMonth = () => { 
                 let m = currentMonth - 1; let y = currentYear;
                 if (m < 1) { m = 12; y -= 1; }
+                const cached = loadStorageData(m, y);
+                setData(cached ? cached : { buildings: [], rooms: [] }); // Reset giao diện ngay lập tức
                 setCurrentMonth(m); setCurrentYear(y); 
             };
             
             const handleNextMonth = () => { 
                 let m = currentMonth + 1; let y = currentYear;
                 if (m > 12) { m = 1; y += 1; }
+                const cached = loadStorageData(m, y);
+                setData(cached ? cached : { buildings: [], rooms: [] }); // Reset giao diện ngay lập tức
                 setCurrentMonth(m); setCurrentYear(y); 
             };
 
