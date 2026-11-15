@@ -720,7 +720,6 @@
                     const res = await fetch(`${SCRIPT_URL}?month=${String(month).padStart(2, '0')}&year=${year}&t=${Date.now()}`);
                     const resData = await res.json();
                     
-                    // SỬA LỖI TẠI ĐÂY: NHẬN DIỆN "LỖI SHEET NOT FOUND" ĐỂ CHỐT SỔ MỚI
                     if (resData.error || !Array.isArray(resData) || resData.length <= 1) {
                         setSyncStatus({ text: 'Đang chốt sổ...', color: 'text-yellow-400' });
                         let prevM = month - 1; let prevY = year;
@@ -734,15 +733,30 @@
                             const newData = { 
                                 buildings: pData.buildings, 
                                 rooms: pData.rooms.map(r => {
-                                    let currentCarried = Number(r.debt || 0);
-                                    if (r.paymentStatus === 'debt' && r.subDebt > 0) currentCarried += Number(r.subDebt);
-                                    if (r.paymentStatus === 'excess' && r.subDebt > 0) currentCarried -= Number(r.subDebt);
+                                    // ĐÃ NÂNG CẤP THUẬT TOÁN TÍNH NỢ CHUẨN XÁC 100%
+                                    const usedE = Math.max(0, (r.currentElec !== null ? r.currentElec : r.lastElec) - r.lastElec);
+                                    const usedW = Math.max(0, (r.currentWater !== null ? r.currentWater : r.lastWater) - r.lastWater);
+                                    const buildingObj = pData.buildings.find(b => b.id === r.buildingId);
+                                    const rates = buildingObj ? buildingObj.rates : { elec: 3500, water: 14000, service: 50000 };
                                     
+                                    const totalLastMonth = Number(r.price || 0) + (usedE * rates.elec) + (usedW * rates.water) + Number(rates.service) + Number(r.debt || 0);
+                                    
+                                    let paidLastMonth = totalLastMonth;
+                                    if (r.paymentStatus === 'debt') {
+                                        paidLastMonth = Math.max(0, totalLastMonth - Number(r.subDebt || 0));
+                                    } else if (r.paymentStatus === 'excess') {
+                                        paidLastMonth = totalLastMonth + Number(r.subDebt || 0);
+                                    } else if (r.paymentStatus === 'none' && r.subDebt === 0 && r.currentElec === null) {
+                                        paidLastMonth = 0; // Tháng trước để trống, coi như nợ full
+                                    }
+
+                                    let carriedDebt = totalLastMonth - paidLastMonth;
+
                                     return { 
                                         ...r, 
                                         lastElec: r.currentElec !== null ? r.currentElec : r.lastElec, 
                                         lastWater: r.currentWater !== null ? r.currentWater : r.lastWater, 
-                                        currentElec: null, currentWater: null, paymentStatus: 'none', subDebt: 0, debt: currentCarried 
+                                        currentElec: null, currentWater: null, paymentStatus: 'none', subDebt: 0, debt: carriedDebt 
                                     };
                                 }) 
                             };
@@ -773,12 +787,11 @@
                 return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
             }, [currentMonth, currentYear]);
 
-            // SỬA LỖI TẠI ĐÂY: XÓA SẠCH GIAO DIỆN (CHỚP MÀN HÌNH) ĐỂ TRÁNH NHÌN LỘN SỐ THÁNG CŨ
             const handlePrevMonth = () => { 
                 let m = currentMonth - 1; let y = currentYear;
                 if (m < 1) { m = 12; y -= 1; }
                 const cached = loadStorageData(m, y);
-                setData(cached ? cached : { buildings: [], rooms: [] }); // Reset giao diện ngay lập tức
+                setData(cached ? cached : { buildings: [], rooms: [] });
                 setCurrentMonth(m); setCurrentYear(y); 
             };
             
@@ -786,7 +799,7 @@
                 let m = currentMonth + 1; let y = currentYear;
                 if (m > 12) { m = 1; y += 1; }
                 const cached = loadStorageData(m, y);
-                setData(cached ? cached : { buildings: [], rooms: [] }); // Reset giao diện ngay lập tức
+                setData(cached ? cached : { buildings: [], rooms: [] });
                 setCurrentMonth(m); setCurrentYear(y); 
             };
 
