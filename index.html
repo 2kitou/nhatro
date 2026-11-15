@@ -733,7 +733,7 @@
                             const newData = { 
                                 buildings: pData.buildings, 
                                 rooms: pData.rooms.map(r => {
-                                    // ĐÃ NÂNG CẤP THUẬT TOÁN TÍNH NỢ CHUẨN XÁC 100%
+                                    // BẮT CHUẨN XÁC KHOẢN NỢ THÁNG TRƯỚC (Tổng hóa đơn tháng trước trừ đi phần đã thanh toán thực tế)
                                     const usedE = Math.max(0, (r.currentElec !== null ? r.currentElec : r.lastElec) - r.lastElec);
                                     const usedW = Math.max(0, (r.currentWater !== null ? r.currentWater : r.lastWater) - r.lastWater);
                                     const buildingObj = pData.buildings.find(b => b.id === r.buildingId);
@@ -746,8 +746,8 @@
                                         paidLastMonth = Math.max(0, totalLastMonth - Number(r.subDebt || 0));
                                     } else if (r.paymentStatus === 'excess') {
                                         paidLastMonth = totalLastMonth + Number(r.subDebt || 0);
-                                    } else if (r.paymentStatus === 'none' && r.subDebt === 0 && r.currentElec === null) {
-                                        paidLastMonth = 0; // Tháng trước để trống, coi như nợ full
+                                    } else if (r.paymentStatus === 'none') {
+                                        paidLastMonth = 0; // Nếu chưa bấm nút gì, coi như nợ full tháng trước
                                     }
 
                                     let carriedDebt = totalLastMonth - paidLastMonth;
