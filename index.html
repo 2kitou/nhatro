@@ -624,11 +624,6 @@
                 }
             }, [data.buildings, selectedBuilding]);
 
-            const wipeInitialData = () => {
-                const cleanData = { buildings: [], rooms: [] };
-                setData(cleanData); saveStorageData(currentMonth, currentYear, cleanData); return cleanData;
-            };
-
             const parseSheetData = (resData, currentBuildingsList = []) => {
                 let newBuildings = []; let newRooms = [];
                 let currentBuildingName = "";
@@ -664,8 +659,6 @@
                     const debt = Number(row[colIdx.debt] || 0);
                     
                     const daThanhToanSheet = row[colIdx.daThanhToan];
-                    const tongTienSheet = Number(row[colIdx.tongTien] || 0);
-
                     const elecRate = row[colIdx.donGiaDien] !== undefined && row[colIdx.donGiaDien] !== "" ? Number(row[colIdx.donGiaDien]) : 3500;
                     const waterRate = row[colIdx.donGiaNuoc] !== undefined && row[colIdx.donGiaNuoc] !== "" ? Number(row[colIdx.donGiaNuoc]) : 14000;
                     const serviceRate = row[colIdx.phiKhac] !== undefined && row[colIdx.phiKhac] !== "" ? Number(row[colIdx.phiKhac]) : 50000;
@@ -687,7 +680,6 @@
                         if (paidNum === expectedTotal && expectedTotal > 0) { computedStatus = 'paid'; } 
                         else if (paidNum < expectedTotal) { computedStatus = 'debt'; computedSubDebt = expectedTotal - paidNum; } 
                         else if (paidNum > expectedTotal) { computedStatus = 'excess'; computedSubDebt = paidNum - expectedTotal; } 
-                        else if (paidNum === 0 && expectedTotal > 0) { computedStatus = 'none'; }
                     }
 
                     const currentRoomsList = data && data.rooms ? data.rooms : [];
@@ -698,7 +690,8 @@
                 return { buildings: newBuildings, rooms: newRooms };
             };
 
-            const syncToSheets = useCallback(async (currentData, month = currentMonth, year = currentYear) => {
+            // TỐI ƯU GỬI NGẦM TỨC THÌ (Lưu siêu nhanh, báo chuẩn xác)
+            const syncToSheets = useCallback((currentData, month = currentMonth, year = currentYear) => {
                 if (!SCRIPT_URL) return;
                 setSyncStatus({ text: 'Đang lưu...', color: 'text-yellow-400' });
                 const payload = { ...currentData, month: String(month).padStart(2, '0'), year: String(year) };
@@ -708,9 +701,9 @@
                     try { 
                         await fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); 
                         setSyncStatus({ text: 'Đã lưu', color: 'text-green-400' });
-                        setTimeout(() => setSyncStatus({ text: '', color: '' }), 2500);
+                        setTimeout(() => setSyncStatus({ text: '', color: '' }), 2000);
                     } catch (e) { setSyncStatus({ text: 'Lỗi mạng', color: 'text-red-400' }); }
-                }, 800); 
+                }, 300); // Giảm độ trễ xuống 300ms để lưu gần như tức thì
             }, [currentMonth, currentYear]);
 
             const fetchDataFromSheet = async (month, year) => {
@@ -721,59 +714,14 @@
                     const resData = await res.json();
                     
                     if (resData.error || !Array.isArray(resData) || resData.length <= 1) {
-                        setSyncStatus({ text: 'Đang chốt sổ...', color: 'text-yellow-400' });
-                        let prevM = month - 1; let prevY = year;
-                        if (prevM < 1) { prevM = 12; prevY -= 1; }
-                        
-                        const prevRes = await fetch(`${SCRIPT_URL}?month=${String(prevM).padStart(2, '0')}&year=${prevY}&t=${Date.now()}`);
-                        const prevResData = await prevRes.json();
-
-                        if (Array.isArray(prevResData) && prevResData.length > 1) {
-                            const pData = parseSheetData(prevResData, data.buildings || []);
-                            const newData = { 
-                                buildings: pData.buildings, 
-                                rooms: pData.rooms.map(r => {
-                                    // BẮT CHUẨN XÁC KHOẢN NỢ THÁNG TRƯỚC (Tổng hóa đơn tháng trước trừ đi phần đã thanh toán thực tế)
-                                    const usedE = Math.max(0, (r.currentElec !== null ? r.currentElec : r.lastElec) - r.lastElec);
-                                    const usedW = Math.max(0, (r.currentWater !== null ? r.currentWater : r.lastWater) - r.lastWater);
-                                    const buildingObj = pData.buildings.find(b => b.id === r.buildingId);
-                                    const rates = buildingObj ? buildingObj.rates : { elec: 3500, water: 14000, service: 50000 };
-                                    
-                                    const totalLastMonth = Number(r.price || 0) + (usedE * rates.elec) + (usedW * rates.water) + Number(rates.service) + Number(r.debt || 0);
-                                    
-                                    let paidLastMonth = totalLastMonth;
-                                    if (r.paymentStatus === 'debt') {
-                                        paidLastMonth = Math.max(0, totalLastMonth - Number(r.subDebt || 0));
-                                    } else if (r.paymentStatus === 'excess') {
-                                        paidLastMonth = totalLastMonth + Number(r.subDebt || 0);
-                                    } else if (r.paymentStatus === 'none') {
-                                        paidLastMonth = 0; // Nếu chưa bấm nút gì, coi như nợ full tháng trước
-                                    }
-
-                                    let carriedDebt = totalLastMonth - paidLastMonth;
-
-                                    return { 
-                                        ...r, 
-                                        lastElec: r.currentElec !== null ? r.currentElec : r.lastElec, 
-                                        lastWater: r.currentWater !== null ? r.currentWater : r.lastWater, 
-                                        currentElec: null, currentWater: null, paymentStatus: 'none', subDebt: 0, debt: carriedDebt 
-                                    };
-                                }) 
-                            };
-                            setData(newData); saveStorageData(month, year, newData);
-                            syncToSheets(newData, month, year); 
-                            return true;
-                        } else {
-                            wipeInitialData();
-                            setSyncStatus({ text: 'Sổ mới trống', color: 'text-gray-400' });
-                            return true;
-                        }
+                        setSyncStatus({ text: 'Sổ mới trống', color: 'text-gray-400' });
+                        setData({ buildings: [], rooms: [] });
+                        return true;
                     }
 
                     const parsedData = parseSheetData(resData, data.buildings || []);
                     setData(parsedData); saveStorageData(month, year, parsedData);
-                    setSyncStatus({ text: 'Dữ liệu mới nhất', color: 'text-green-400' });
-                    setTimeout(() => setSyncStatus({ text: '', color: '' }), 2500);
+                    setSyncStatus({ text: '', color: '' });
                     return true;
                 } catch (e) { setSyncStatus({ text: 'Lỗi tải Sheet', color: 'text-red-400' }); }
                 return false;
